@@ -5,7 +5,10 @@ Il démarre les agents du registre en mode « auto » puis l'IHM du manager, sur
 ferme la fenêtre. L'IHM lui envoie ses ordres (démarrer, arrêter, redémarrer) par un petit serveur HTTP local
 (127.0.0.1), protégé par un jeton écrit dans ``.tmp/superviseur.json``.
 
-Il ne touche jamais au code ni aux données des agents : il lance leur commande dans leur dossier, c'est tout.
+Il ne touche jamais au code ni aux données des agents : il lance leur commande dans leur dossier, avec en variables
+d'environnement la configuration commune qui leur revient (``configuration.variables_pour`` : accès, secrets
+autorisés par le registre, dossier de la configuration). Elle est relue à chaque lancement : après un changement
+dans l'onglet Configuration, il suffit de redémarrer l'agent.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from manager import configuration
 from manager import registre as reg
 
 DOSSIER_TMP = reg.RACINE / ".tmp"
@@ -70,7 +74,7 @@ class Suivi:
 class Superviseur:
     def __init__(self, agents: list[reg.Agent], dossier_logs: Path = DOSSIER_TMP / "logs", sante=sante,
                  delai_demarrage: float = 90.0, max_relances: int = 3, fenetre_relances: float = 600.0,
-                 delai_arret: float = 10.0, env: dict[str, str] | None = None):
+                 delai_arret: float = 10.0, env: dict[str, str] | None = None, environnement=None):
         self.suivis = {a.nom: Suivi(a) for a in agents}
         self.dossier_logs = dossier_logs
         self.sante = sante
@@ -79,6 +83,7 @@ class Superviseur:
         self.fenetre_relances = fenetre_relances
         self.delai_arret = delai_arret
         self.env = env
+        self.environnement = environnement      # agent -> variables propres à lui (configuration commune)
         self.verrou = threading.RLock()
 
     # --- ordres -------------------------------------------------------------------------------------------------
@@ -173,11 +178,18 @@ class Superviseur:
             suivi.etat, suivi.voulu = INSTALLATION, False
             suivi.message = f"introuvable : {executable} (venv à créer dans le dossier de l'agent)"
             return
+        env = dict(self.env if self.env is not None else os.environ)
+        if self.environnement:
+            try:
+                env.update(self.environnement(agent))
+            except (configuration.ConfigurationErreur, OSError) as e:
+                suivi.etat, suivi.voulu = INSTALLATION, False
+                suivi.message = f"configuration commune illisible : {e}"
+                return
         self.dossier_logs.mkdir(parents=True, exist_ok=True)
         journal = open(self.journal(agent.nom), "a", encoding="utf-8")
         journal.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} lancement : {' '.join(commande)}\n")
         journal.flush()
-        env = dict(self.env if self.env is not None else os.environ)
         env["PYTHONUNBUFFERED"] = "1"
         options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if sys.platform == "win32" else {}
         try:
@@ -284,7 +296,8 @@ def main(intervalle: float = 5.0) -> int:
         webbrowser.open(f"http://localhost:{registre.port_manager}")
         return 0
 
-    superviseur = Superviseur(registre.agents + [agent_manager(registre)])
+    superviseur = Superviseur(registre.agents + [agent_manager(registre)],
+                              environnement=lambda a: {} if a.nom == NOM_MANAGER else configuration.variables_pour(a))
     jeton = secrets.token_urlsafe(24)
     try:
         serveur = serveur_commandes(superviseur, registre.port_superviseur, jeton)

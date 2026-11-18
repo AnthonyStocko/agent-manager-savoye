@@ -1,13 +1,12 @@
 """IHM du manager (port 8500), lancée par le superviseur : ``lancer.bat``.
 
-Onglets : Assistant et Tableau de bord (lots suivants), Agents (état, lancement, arrêt, journal), Configuration.
+Onglets : Assistant et Tableau de bord (lots suivants), Agents (état, lancement, arrêt, journal), Configuration
+(accès communs, applications, import des réglages des agents, registre).
 """
-
-from pathlib import Path
 
 import streamlit as st
 
-from manager import registre as reg
+from manager import ihm_configuration
 from manager import superviseur as sup
 from manager.pilote import Pilote, PiloteErreur
 
@@ -58,23 +57,6 @@ def onglet_agents() -> None:
                 st.code(fin_du_journal(agent["nom"]), language="text")
 
 
-def onglet_configuration() -> None:
-    fichier = reg.FICHIER if reg.FICHIER.exists() else reg.EXEMPLE
-    st.markdown(f"Registre des agents : `{fichier}`")
-    if fichier == reg.EXEMPLE:
-        st.info("Aucun `agents.toml` : le modèle `agents.example.toml` est utilisé. Copie-le en `agents.toml` "
-                "pour l'adapter à ton poste (dossiers, ports), puis relance le manager.")
-    try:
-        registre = reg.charger()
-    except reg.RegistreErreur as e:
-        st.error(str(e))
-        return
-    st.dataframe([{"Agent": a.titre, "Port": a.port, "Mode": a.mode, "Dossier": str(a.dossier),
-                   "Dossier présent": Path(a.dossier).is_dir()} for a in registre.agents],
-                 hide_index=True, width="stretch")
-    st.caption("La configuration partagée (accès, référentiel des applications Odatio) arrive au lot 2.")
-
-
 st.title("🧭 Manager Savoye")
 assistant, tableau, agents, configuration = st.tabs(["Assistant", "Tableau de bord", "Agents", "Configuration"])
 with assistant:
@@ -84,4 +66,4 @@ with tableau:
 with agents:
     onglet_agents()
 with configuration:
-    onglet_configuration()
+    ihm_configuration.afficher()
