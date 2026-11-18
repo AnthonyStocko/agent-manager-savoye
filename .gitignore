@@ -1,0 +1,12 @@
+.idea/
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.pyc
+.tmp/
+.cache/
+agents.toml
+config/commun.toml

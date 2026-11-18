@@ -1,0 +1,52 @@
+# Registre des agents. Copie ce fichier en agents.toml et adapte-le à ton poste (agents.toml n'est pas versionné).
+# Les dossiers relatifs le sont au dossier de ce fichier : par défaut, les agents sont clonés à côté du manager.
+#
+# Champs d'un agent :
+#   nom       identifiant (minuscules, chiffres, tirets)
+#   titre     nom affiché
+#   dossier   copie locale du dépôt de l'agent (avec son venv)
+#   port      port de son IHM Streamlit (8500 = manager, 8499 = superviseur : réservés)
+#   mode      "auto" (lancé avec le manager) ou "demande" (lancé depuis l'onglet Agents)
+#   commande  facultatif ; par défaut : {python} -m streamlit run app.py sur {port}, en 127.0.0.1
+#             ({python} = venv de l'agent, {port} = son port, {dossier} = son dossier)
+#   domaine   ce que l'agent sait faire : lu par le routeur du manager (lot 4)
+#   mcp       commande de son serveur MCP en lecture seule (lot 4)
+#   secrets   variables de la configuration commune transmises au lancement (lot 2)
+
+[manager]
+port = 8500
+port_superviseur = 8499
+
+[[agents]]
+nom = "scrum-master"
+titre = "Scrum Master"
+dossier = "../agent-scrum-master"
+port = 8501
+mode = "auto"
+domaine = """Cycle de vie d'un ticket Jira Odatio : intégration du besoin, analyse et cadrage, chiffrage, découpage
+d'épopée, patch Git et release note, tests Cucumber (génération, exécution Jenkins, correction, livraison)."""
+mcp = []
+secrets = []
+
+[[agents]]
+nom = "odatio"
+titre = "Agent fonctionnel Odatio"
+dossier = "../agent-odatio"
+port = 8502
+mode = "auto"
+domaine = """Questions fonctionnelles sur une application Odatio (calculs, blocages, règles), réponses prouvées par
+les sources, la base en lecture seule et les logs ; préparation des tests d'un ticket ; fichiers d'interface de
+test (commande « à l'identique »…)."""
+mcp = []
+secrets = []
+
+[[agents]]
+nom = "dev-tool"
+titre = "Outillage de développement"
+dossier = "../agent-dev-tool-savoye"
+port = 8503
+mode = "demande"
+domaine = """Évolution du code des agents (dont le manager) : analyse, plan, développement dans un chantier
+isolé, PR ; extraction et comparaison des prompts et outils d'un agent."""
+mcp = []
+secrets = []
