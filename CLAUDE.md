@@ -22,7 +22,8 @@ Ses missions :
 2. **Point d'entrée unique** (lot 4) : l'utilisateur pose ses questions au manager, qui applique la règle de
    décision (§ 5).
 3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, patchs livrés, alertes.
-4. **Configuration partagée** (lot 2) : accès et référentiel des applications Odatio, communs à tous les agents.
+4. **Configuration partagée** : accès et référentiel des applications Odatio, communs à tous les agents (lot 2 ;
+   les agents la liront en priorité au lot 3).
 
 Le manager **ne fait aucune écriture métier** : ni Jira, ni push, ni Jenkins. Ces gestes restent dans les agents
 spécialisés, avec leurs propres validations. Il ne les contourne jamais.
@@ -38,16 +39,34 @@ spécialisés, avec leurs propres validations. Il ne les contourne jamais.
 ```
 lancer.bat               point d'entrée : lance le superviseur
 agents.example.toml      modèle du registre des agents (agents.toml, non versionné, l'adapte au poste)
+config/commun.example.toml, config/.env.example   modèles fictifs de la configuration commune
 app.py                   IHM : Assistant · Tableau de bord · Agents · Configuration
 manager/registre.py      lecture et contrôle du registre
 manager/superviseur.py   processus séparé : lancement, santé, relance, arrêt, canal de commande local
 manager/pilote.py        client du canal de commande, utilisé par l'IHM
+manager/configuration.py configuration commune : accès, applications, secrets, variables transmises à chaque agent
+manager/migration.py     import, une fois, des .env des agents et des projets d'agent-odatio
+manager/ihm_configuration.py  onglet Configuration
 tests/                   tests unitaires ; tests/faux_agent.py simule un agent Streamlit
 ```
 
-Prévu dans les lots suivants : `config/` (commun.example.toml, .env.example), `manager/configuration.py`,
-`manager/migration.py`, `manager/consignes.py`, `manager/routeur.py`, `manager/liens.py`, `manager/journal.py`,
-`tests/evals/`.
+Prévu dans les lots suivants : `manager/consignes.py`, `manager/routeur.py`, `manager/liens.py`,
+`manager/journal.py`, `tests/evals/`.
+
+### Configuration commune
+
+- `config/commun.toml` (sans secret) : `[acces]` (variables non secrètes : `JIRA_DOMAIN`, `BITBUCKET_URL`,
+  `JENKINS_URL`…) et `[[applications]]` (nom, projet Jira, sources, dépôt Cucumber, job Jenkins, application web,
+  base, logs dont SSH). `config/.env` : les secrets. Les deux sont écrits par l'onglet Configuration, jamais
+  versionnés ; liste des accès dans `configuration.ACCES`.
+- Noms de variables : **ceux que les agents utilisent déjà** (`JIRA_API_TOKEN`, `BITBUCKET_HTTP_TOKEN`…). Secrets
+  d'une application : `DB_PASSWORD_<NOM>`, `APP_PASSWORD_<NOM>`, `SSH_PASSWORD_<NOM>` (convention d'agent-odatio).
+- Au lancement d'un agent, le superviseur ajoute à son environnement : les accès non secrets, les secrets que le
+  registre lui autorise (`secrets`, motifs acceptés) et `SAVOYE_CONFIG_DIR`. Relu à chaque lancement : après une
+  modification, redémarrer l'agent.
+- Tant qu'un agent n'est pas adapté (lot 3), son propre `.env` l'emporte : odatio ne lit l'environnement que
+  pour les secrets absents de son `.env`, et scrum-master recharge son `.env` avec `override=True`.
+- L'import (`migration.py`) complète sans écraser et ne modifie jamais les fichiers des agents.
 
 ### Superviseur
 
@@ -95,7 +114,8 @@ Prévu dans les lots suivants : `config/` (commun.example.toml, .env.example), `
    | Demande ambiguë | Poser une seule question |
 
 3. **Moindre privilège** : chaque agent ne reçoit que les secrets listés pour lui dans le registre (ex. odatio ne
-   reçoit jamais de jeton d'écriture Jira ou Bitbucket).
+   reçoit jamais `BITBUCKET_WRITE_TOKEN` ni `JENKINS_API_TOKEN`). Le jeton Jira est unique et personnel : odatio
+   le reçoit et ne s'en sert qu'en lecture (garanti par son code, pas par le jeton).
 4. **Dépôt public** : aucun secret, aucune donnée réelle de client, d'entrepôt ou d'infrastructure (URL internes,
    noms de clients, schémas de base) dans les commits, exemples et tests. `agents.toml`, `config/commun.toml` et
    `.env` ne sont jamais versionnés.
@@ -118,8 +138,8 @@ Prévu dans les lots suivants : `config/` (commun.example.toml, .env.example), `
 - Même compte Claude que les autres agents.
 - IHM Streamlit sur le port 8500, liens directs vers 8501, 8502 et 8503.
 
-Lots : 0 cible dans dev-tool · 1 structure, registre, superviseur, onglet Agents · 2 configuration commune et
-migration · 3 lecture du commun par odatio et scrum-master · 4 serveurs MCP, routeur, règle de décision ·
+Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, onglet Agents (fait) · 2 configuration
+commune et migration (fait) · 3 lecture du commun par odatio et scrum-master · 4 serveurs MCP, routeur, règle de décision ·
 5 liens de redirection préremplis (`?ticket=…&onglet=…`, lus par les agents) · 6 journal, index par ticket,
 tableau de bord, puis initiatives (point du matin, relances).
 

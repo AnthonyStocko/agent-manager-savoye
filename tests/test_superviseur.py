@@ -7,6 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
+from manager import configuration
 from manager import registre as reg
 from manager import superviseur as sup
 from manager.pilote import Pilote, PiloteErreur
@@ -115,6 +116,29 @@ class TestSuperviseur(unittest.TestCase):
         s.demarrer_auto()
         self.assertEqual({a["nom"]: a["etat"] for a in s.etat()},
                          {"odatio": sup.DEMARRAGE, "dev-tool": sup.ARRETE})
+
+    def test_configuration_commune_transmise_au_lancement(self):
+        temoin = self.dossier / "env.txt"
+        script = ("import os, pathlib, time; pathlib.Path(r'%s').write_text(os.environ.get('JIRA_API_TOKEN', '') + '|' "
+                  "+ os.environ.get('SAVOYE_CONFIG_DIR', ''), encoding='utf-8'); time.sleep(30)" % temoin)
+        agent = reg.Agent(nom="odatio", titre="Odatio", dossier=self.dossier, port=port_libre(),
+                          commande=(sys.executable, "-c", script))
+        s = self.superviseur(agent, environnement=lambda a: {"JIRA_API_TOKEN": "jeton", "SAVOYE_CONFIG_DIR": "/cfg"})
+        s.demarrer("odatio")
+        fin = time.monotonic() + 10
+        while not temoin.exists() and time.monotonic() < fin:
+            time.sleep(0.1)
+        time.sleep(0.2)
+        self.assertEqual(temoin.read_text(encoding="utf-8"), "jeton|/cfg")
+
+    def test_configuration_commune_illisible(self):
+        def illisible(agent):
+            raise configuration.ConfigurationErreur("commun.toml illisible")
+        s = self.superviseur(faux("odatio", self.dossier), environnement=illisible)
+        resume = s.demarrer("odatio")
+        self.assertEqual(resume["etat"], sup.INSTALLATION)
+        self.assertIn("commun.toml illisible", resume["message"])
+        self.assertIsNone(resume["pid"])
 
     def test_manager_supervise_comme_un_agent(self):
         manager = sup.agent_manager(reg.lire({}))

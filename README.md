@@ -1,8 +1,8 @@
 # agent-manager-savoye
 
 Le chef d'orchestre de la suite d'agents Savoye : un double-clic lance tous les agents, les surveille et réunit
-leur état dans une seule IHM. À venir : un point d'entrée unique pour les questions, la configuration partagée et
-un tableau de bord. Rôle, règles et décisions : voir `CLAUDE.md`.
+leur état dans une seule IHM, et tient la configuration commune (accès, applications Odatio). À venir : un point
+d'entrée unique pour les questions et un tableau de bord. Rôle, règles et décisions : voir `CLAUDE.md`.
 
 | Agent | Port | Lancement |
 |---|---|---|
@@ -37,6 +37,21 @@ la fin de son journal. Un agent qui s'arrête tout seul est relancé (3 fois au 
 lancé par son propre `lancer.bat` est reconnu et laissé tel quel.
 
 Journaux : `.tmp/logs/<agent>.log`.
+
+## Configuration commune
+
+Onglet **Configuration** :
+
+- **Accès** : Jira, Bitbucket, Jenkins, groundcover et compte Claude, une seule fois pour tous les agents ;
+- **Applications** : le référentiel des applications Odatio (sources, base, logs, application web, projet Jira,
+  job Jenkins), avec leurs mots de passe ;
+- **Import** : reprend une fois les `.env` des agents et les projets d'agent-odatio. Rien n'est écrit avant ta
+  validation, les fichiers des agents ne sont pas modifiés, ce qui existe déjà est gardé ;
+- **Registre des agents** : ports, modes et secrets transmis à chacun.
+
+Fichiers : `config/commun.toml` (sans secret) et `config/.env` (secrets), jamais versionnés. Au lancement, chaque
+agent reçoit les accès communs et **seulement les secrets que le registre lui autorise** ; après une
+modification, redémarre-le depuis l'onglet Agents.
 
 ## Tests
 

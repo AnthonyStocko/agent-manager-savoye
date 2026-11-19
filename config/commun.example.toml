@@ -1,0 +1,49 @@
+# Configuration commune des agents Savoye : modèle fictif. Le manager écrit config/commun.toml (non versionné)
+# depuis son onglet Configuration. Aucun secret ici : jetons et mots de passe vont dans config/.env.
+
+[acces]
+CLAUDE_AUTH = "compte"                     # compte (abonnement) ou cle (ANTHROPIC_API_KEY dans config/.env)
+JIRA_DOMAIN = "societe.atlassian.net"
+JIRA_EMAIL = "prenom.nom@societe.com"
+BITBUCKET_URL = "https://git.exemple.io"
+JENKINS_URL = "https://jenkins.exemple.io"
+JENKINS_USER = "prenom.nom"
+GROUNDCOVER_API_URL = "https://api.groundcover.exemple"
+GROUNDCOVER_BACKEND_ID = "backend-exemple"
+
+# Une application Odatio : secrets associés dans config/.env sous DB_PASSWORD_<NOM>, APP_PASSWORD_<NOM> et
+# SSH_PASSWORD_<NOM> (ex. DB_PASSWORD_CLIENT_X_RECETTE).
+[[applications]]
+nom = "client-x-recette"
+description = "Recette du client X"
+jira_projet = "CX"
+depot_cucumber = "https://git.exemple.io/scm/cx/client-x-cucumber.git"
+jenkins_job = "CLIENT_X_CUCUMBER"
+url = "https://client-x-recette.exemple.io"
+utilisateur_application = "testeur"
+
+[[applications.sources]]
+nom = "standard"
+depot = "https://git.exemple.io/scm/std/odatio-standard.git"
+branche = "integration"
+
+[[applications.sources]]
+nom = "client-x"
+depot = "https://git.exemple.io/scm/cx/client-x.git"
+branche = "dev"
+
+[applications.base]
+type = "postgresql"
+hote = "base-recette.exemple.io"
+port = "5432"
+nom = "odatio"
+utilisateur = "lecture_seule"
+schema = "public"
+
+[applications.logs]
+groundcover_filtre = "namespace:client-x-recette"
+
+[applications.logs.ssh]
+hote = "serveur-logs.exemple.io"
+utilisateur = "lecture-logs"
+dossiers = ["/var/log/odatio"]
