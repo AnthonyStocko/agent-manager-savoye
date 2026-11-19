@@ -19,8 +19,8 @@ Ses missions :
 
 1. **Lanceur et superviseur** : un double-clic sur `lancer.bat` lance le superviseur, qui démarre les agents en
    mode « auto » puis l'IHM du manager. Il les surveille, relance un agent tombé et arrête tout à la fermeture.
-2. **Point d'entrée unique** (lot 4) : l'utilisateur pose ses questions au manager, qui applique la règle de
-   décision (§ 5).
+2. **Point d'entrée unique** (onglet Assistant) : l'utilisateur pose ses questions au manager, qui applique la
+   règle de décision (§ 5).
 3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, patchs livrés, alertes.
 4. **Configuration partagée** : accès et référentiel des applications Odatio, communs à tous les agents (lot 2 ;
    les agents la liront en priorité au lot 3).
@@ -31,10 +31,13 @@ spécialisés, avec leurs propres validations. Il ne les contourne jamais.
 ## 2. Stack, structure et commandes
 
 - Python 3.12 ; `python` n'est pas dans le PATH de PowerShell : utiliser `py -3.12` ou le venv du dépôt.
-- Streamlit (IHM, port 8500). Claude Agent SDK (lot 4), SQLite (lot 6), `tomllib` et `.env`.
+- Streamlit (IHM, port 8500). Claude Agent SDK (assistant), SQLite (lot 6), `tomllib` et `.env`.
 - Installation : `py -3.12 -m venv venv` puis `venv\Scripts\python.exe -m pip install -r requirements.txt`.
 - Lancement : `lancer.bat` (= `venv\Scripts\python.exe -m manager.superviseur`).
-- Tests : `venv\Scripts\python.exe -m unittest discover -s tests` (bibliothèque standard seulement). Aucun linter.
+- Tests : `venv\Scripts\python.exe -m unittest discover -s tests` (les tests de l'assistant sont ignorés sans
+  `claude-agent-sdk`). Aucun linter.
+- Évaluation de la règle de décision : `venv\Scripts\python.exe -m manager.evals` (simulation : les agents ne sont
+  pas interrogés ; `--reel` pour les interroger). Coûte un appel au modèle par cas.
 
 ```
 lancer.bat               point d'entrée : lance le superviseur
@@ -47,11 +50,14 @@ manager/pilote.py        client du canal de commande, utilisé par l'IHM
 manager/configuration.py configuration commune : accès, applications, secrets, variables transmises à chaque agent
 manager/migration.py     import, une fois, des .env des agents et des projets d'agent-odatio
 manager/ihm_configuration.py  onglet Configuration
+manager/consignes.py     prompt système de l'assistant (règle de décision)
+manager/routeur.py       assistant : session Agent SDK, outils internes, serveurs MCP des agents
+manager/ihm_assistant.py onglet Assistant
+manager/evals.py         évaluation de la règle de décision sur tests/evals/decisions.toml
 tests/                   tests unitaires ; tests/faux_agent.py simule un agent Streamlit
 ```
 
-Prévu dans les lots suivants : `manager/consignes.py`, `manager/routeur.py`, `manager/liens.py`,
-`manager/journal.py`, `tests/evals/`.
+Prévu dans les lots suivants : `manager/liens.py` (liens préremplis), `manager/journal.py`.
 
 ### Configuration commune
 
@@ -85,9 +91,16 @@ Prévu dans les lots suivants : `manager/consignes.py`, `manager/routeur.py`, `m
 
 ## 3. Prompts, outils et évals
 
-- Prompt système : `manager/consignes.py` (lot 4).
-- Outils : les serveurs MCP **en lecture seule** des agents, déclarés dans le registre (champ `mcp`, lot 4).
-- Évals : `tests/evals/`, une question type et la décision attendue (répondre / interroger / rediriger).
+- Prompt système : `manager/consignes.py` (`MODELE`, `construire`), avec les agents du registre et les
+  applications de la configuration commune.
+- Outils (`manager/routeur.py`), tous en lecture seule ; aucun outil intégré de Claude Code (`tools=[]`),
+  `permission_mode="dontAsk"`, `strict_mcp_config`, `setting_sources=[]` :
+  - internes (serveur « manager ») : `etat_agents`, `applications`, `rediriger` (prépare un lien affiché sous la
+    réponse, n'agit pas) ;
+  - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
+    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins), odatio `mcp_server.py --manager`
+    (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
+- Évals : `tests/evals/decisions.toml` (question → décision et agent attendus), `manager/evals.py`.
 
 ## 4. Glossaire
 
@@ -140,7 +153,8 @@ Prévu dans les lots suivants : `manager/consignes.py`, `manager/routeur.py`, `m
 - IHM Streamlit sur le port 8500, liens directs vers 8501, 8502 et 8503.
 
 Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, onglet Agents (fait) · 2 configuration
-commune et migration (fait) · 3 lecture du commun par odatio et scrum-master · 4 serveurs MCP, routeur, règle de décision ·
+commune et migration (fait) · 3 lecture du commun par odatio et scrum-master (fait) · 4 serveurs MCP, routeur, règle
+de décision (fait) ·
 5 liens de redirection préremplis (`?ticket=…&onglet=…`, lus par les agents) · 6 journal, index par ticket,
 tableau de bord, puis initiatives (point du matin, relances).
 
@@ -149,8 +163,8 @@ tableau de bord, puis initiatives (point du matin, relances).
 - scrum-master a aussi un écouteur de merges (`webhook_server.py --poll`), qui n'est pas une IHM Streamlit :
   faut-il le lancer avec le manager ? Le registre accepte une commande libre, mais la santé suppose aujourd'hui
   `/_stcore/health` (prévoir un champ `sante` : streamlit, http ou processus seul).
-- Serveur MCP de scrum-master (lot 4) : il ne doit pas être déclaré dans une configuration chargée par le CLI
-  `claude` que scrum-master lance depuis sa racine, sinon chaque appel de production le recevrait.
+- Serveur MCP de scrum-master : il ne doit pas être déclaré dans une configuration chargée par le CLI `claude` que
+  scrum-master lance depuis sa racine (pas de `.mcp.json`) ; le manager le lance lui-même.
 - Ports : odatio fixe 8502 dans son `.streamlit/config.toml`, scrum-master utilise le défaut 8501. Le superviseur
   passe toujours `--server.port` : le registre fait foi.
 - Coûts : le journal (lot 6) notera le coût de chaque question routée ; un modèle léger pour le routage ?

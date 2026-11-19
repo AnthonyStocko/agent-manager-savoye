@@ -1,0 +1,55 @@
+# Questions types et décision attendue de l'assistant du manager (règle de décision, CLAUDE.md § 5).
+# Données fictives uniquement (dépôt public). Lancement : venv\Scripts\python.exe -m manager.evals
+# decision : repondre (seul), interroger (un agent, en lecture seule), rediriger (vers l'agent indiqué).
+
+[[cas]]
+question = "Quels agents tournent en ce moment ?"
+decision = "repondre"
+
+[[cas]]
+question = "Quelles applications sont configurées dans le manager ?"
+decision = "repondre"
+
+[[cas]]
+question = "Où en est l'analyse du ticket ODA-1234 ? Est-elle publiée ?"
+decision = "interroger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Est-ce qu'un job Cucumber tourne en ce moment sur Jenkins ?"
+decision = "interroger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Sur client-x-recette, comment est calculée la date de préparation d'une commande ?"
+decision = "interroger"
+agent = "odatio"
+
+[[cas]]
+question = "Lance les tests Cucumber du ticket ODA-1234."
+decision = "rediriger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Valide l'analyse de ODA-1234 et publie-la dans Jira."
+decision = "rediriger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Fais le chiffrage du ticket ODA-2000."
+decision = "rediriger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Génère un fichier de commande à l'identique de la commande CDE-0001 sur client-x-recette."
+decision = "rediriger"
+agent = "odatio"
+
+[[cas]]
+question = "L'agent Odatio devrait pouvoir lire les logs Jenkins : ajoute-lui cette fonction."
+decision = "rediriger"
+agent = "dev-tool"
+
+[[cas]]
+question = "Pourquoi c'est bloqué ?"
+decision = "repondre"

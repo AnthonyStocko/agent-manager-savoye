@@ -48,13 +48,22 @@ class Agent:
 
     @property
     def python(self) -> Path:
-        """Python du venv de l'agent (Windows, sinon Linux / macOS)."""
-        windows = self.dossier / "venv" / "Scripts" / "python.exe"
-        return windows if windows.exists() or sys.platform == "win32" else self.dossier / "venv" / "bin" / "python"
+        """Python du venv de l'agent : venv/ ou .venv/ (scrum-master), Windows sinon Linux / macOS."""
+        candidats = [self.dossier / v / "Scripts" / "python.exe" for v in ("venv", ".venv")] + \
+                    [self.dossier / v / "bin" / "python" for v in ("venv", ".venv")]
+        existant = next((c for c in candidats if c.exists()), None)
+        return existant or candidats[0 if sys.platform == "win32" else 2]
+
+    def _formater(self, parties) -> list[str]:
+        valeurs = {"python": str(self.python), "port": str(self.port), "dossier": str(self.dossier)}
+        return [partie.format(**valeurs) for partie in parties]
 
     def ligne_de_commande(self) -> list[str]:
-        valeurs = {"python": str(self.python), "port": str(self.port), "dossier": str(self.dossier)}
-        return [partie.format(**valeurs) for partie in self.commande]
+        return self._formater(self.commande)
+
+    def ligne_mcp(self) -> list[str]:
+        """Commande de son serveur MCP en lecture seule ([] s'il n'en a pas)."""
+        return self._formater(self.mcp)
 
 
 @dataclass

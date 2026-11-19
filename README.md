@@ -38,6 +38,20 @@ lancé par son propre `lancer.bat` est reconnu et laissé tel quel.
 
 Journaux : `.tmp/logs/<agent>.log`.
 
+## Assistant
+
+Onglet **Assistant** : pose ta question au manager. Selon la règle de décision, il :
+
+- **répond seul** à une question d'état général (agents en ligne, applications configurées) ;
+- **interroge** les agents en lecture seule pour une question rapide : état d'une analyse ou d'un ticket, génération
+  Cucumber ou build Jenkins en cours (Scrum Master), question fonctionnelle sur une application (Odatio, quelques
+  minutes ; la conversation se poursuit ensuite dans Odatio) ;
+- **te redirige** vers le bon agent, avec un lien et un résumé, pour tout ce qui demande une validation, une
+  écriture, un travail long ou le job Jenkins (cadrage, chiffrage, patch, tests Cucumber, fichier d'interface…), et
+  vers l'outillage de développement, avec une demande prête à coller, pour faire évoluer un agent.
+
+Il ne modifie jamais rien lui-même. Il utilise le compte Claude de la configuration commune.
+
 ## Configuration commune
 
 Onglet **Configuration** :
