@@ -79,8 +79,19 @@ class TestRouteur(unittest.TestCase):
              "demande": "Dépôt agent-odatio : …"}))
         self.assertFalse(resultat["is_error"])
         self.assertIn("lancé à la demande", resultat["content"][0]["text"])
+        self.assertIn("prérempli (ticket, demande)", resultat["content"][0]["text"])
         r = self.routeur.redirections[0]
-        self.assertEqual((r.agent, r.url, r.ticket), ("dev-tool", "http://localhost:8503", "ODA-1"))
+        self.assertEqual((r.agent, r.ticket), ("dev-tool", "ODA-1"))
+        self.assertTrue(r.url.startswith("http://localhost:8503/?source=manager&ticket=ODA-1&demande="))
+        # Onglet inconnu de l'agent : ignoré, et signalé
+        texte = asyncio.run(self.outil("rediriger").handler(
+            {"agent": "odatio", "resume": "Préparer le fichier.", "onglet": "cucumber", "projet": "client-x",
+             "question": "Prépare une commande à l'identique.", "conversation": "20261119-101500-000001"}))
+        self.assertIn("Onglet inconnu", texte["content"][0]["text"])
+        r2 = self.routeur.redirections[1]
+        self.assertNotIn("page=", r2.url)
+        self.assertIn("conversation=20261119-101500-000001", r2.url)
+        self.assertEqual(r2.question, "Prépare une commande à l'identique.")
         self.assertEqual(routeur.decision(routeur.Reponse(redirections=[r])), ("rediriger", "dev-tool"))
         erreur = asyncio.run(self.outil("rediriger").handler({"agent": "inconnu", "resume": "x"}))
         self.assertTrue(erreur["is_error"])

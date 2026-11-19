@@ -28,10 +28,14 @@ def _redirection(r: routeur.Redirection) -> None:
         st.markdown(f"**→ À faire dans {r.titre}**" + (f" — {details}" if details else ""))
         if r.resume:
             st.markdown(r.resume)
+        if r.question:
+            st.caption("Question préremplie dans l'agent (à envoyer toi-même) :")
+            st.code(r.question, language="text")
         if r.demande:
-            st.caption("Demande prête à coller :")
+            st.caption("Demande préremplie (et prête à coller) :")
             st.code(r.demande, language="text")
-        st.link_button(f"Ouvrir {r.titre}", r.url, icon=":material/open_in_new:")
+        st.link_button(f"Ouvrir {r.titre}", r.url, icon=":material/open_in_new:",
+                       help="L'agent s'ouvre au bon endroit, prérempli ; il ne lance rien sans toi.")
 
 
 def _afficher(echange: dict) -> None:
