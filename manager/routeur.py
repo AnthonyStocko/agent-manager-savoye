@@ -6,7 +6,8 @@ Outils, tous en LECTURE SEULE :
   commune qui leur revient (``configuration.variables_pour``, moindre privilège).
 Aucun outil intégré de Claude Code (ni Bash, ni Read, ni Edit) ; réglages et CLAUDE.md du poste ignorés.
 
-« rediriger » n'agit pas : il prépare un lien vers l'agent, affiché à l'utilisateur sous la réponse.
+« rediriger » n'agit pas : il prépare un lien vers l'agent, affiché à l'utilisateur sous la réponse, prérempli
+(onglet, ticket, projet, question ou demande : liens.py) ; l'agent ne fait rien sans l'utilisateur.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from manager import configuration as conf
 from manager import consignes
+from manager import liens
 from manager import registre as reg
 from manager.pilote import Pilote, PiloteErreur
 
@@ -39,6 +41,10 @@ class Redirection:
     ticket: str = ""
     projet: str = ""
     demande: str = ""      # demande prérédigée (ex. pour dev-tool)
+    onglet: str = ""
+    question: str = ""     # question préremplie dans l'agent (jamais envoyée sans l'utilisateur)
+    depot: str = ""        # dépôt cible de dev-tool
+    conversation: str = ""  # conversation de l'agent Odatio à reprendre
 
 
 @dataclass
@@ -105,28 +111,49 @@ class Routeur:
                               f" · Jira : {a.jira_projet or '—'} · Jenkins : {a.jenkins_job or '—'}")
             return _texte("\n".join(lignes) or "Aucune application dans la configuration commune.")
 
+        onglets = "; ".join(f"{nom} : {', '.join(o)}" for nom, o in liens.ONGLETS.items() if nom in noms)
         @tool("rediriger", "Redirige l'utilisateur vers un agent pour une demande qu'il doit y faire lui-même "
-              f"(validation, écriture, travail long, ressource partagée, amélioration d'un agent). agent : un de "
-              f"{', '.join(noms)}. resume : ce qui est demandé et ce que tu sais déjà (2 à 5 phrases). ticket : clé "
-              "Jira si connue. projet : application si connue. demande : texte prêt à coller dans l'agent "
-              "(obligatoire pour dev-tool).",
+              f"(validation, écriture, travail long, ressource partagée, amélioration d'un agent). Le lien ouvre "
+              f"l'agent prérempli ; il n'y lance rien. agent : un de {', '.join(noms)}. resume : ce qui est demandé "
+              "et ce que tu sais déjà (2 à 5 phrases). onglet : page de l'agent à ouvrir "
+              f"({onglets}). ticket : clé Jira si connue. projet : application si connue. question : question "
+              "prête à envoyer dans l'assistant de l'agent (odatio, scrum-master). conversation : identifiant de la "
+              "conversation enregistrée par l'agent Odatio, pour la reprendre. demande : texte prêt pour dev-tool "
+              "(obligatoire pour dev-tool), et depot : agent à faire évoluer.",
               {"type": "object", "properties": {"agent": {"type": "string", "enum": noms},
-                                                "resume": {"type": "string"}, "ticket": {"type": "string"},
-                                                "projet": {"type": "string"}, "demande": {"type": "string"}},
+                                                "resume": {"type": "string"}, "onglet": {"type": "string"},
+                                                "ticket": {"type": "string"}, "projet": {"type": "string"},
+                                                "question": {"type": "string"}, "conversation": {"type": "string"},
+                                                "demande": {"type": "string"}, "depot": {"type": "string"}},
                "required": ["agent", "resume"]})
         async def rediriger(args):
             try:
                 agent = self.registre.agent(args.get("agent", ""))
             except reg.RegistreErreur as e:
                 return _texte(str(e), True)
-            r = Redirection(agent=agent.nom, titre=agent.titre, url=agent.url, resume=args.get("resume", "").strip(),
-                            ticket=args.get("ticket", "").strip().upper(), projet=args.get("projet", "").strip(),
-                            demande=args.get("demande", "").strip())
+            valeurs = {k: str(args.get(k) or "").strip() for k in ("onglet", "ticket", "projet", "question",
+                                                                    "conversation", "demande", "depot")}
+            resume = str(args.get("resume") or "").strip()
+            url = liens.construire(agent.nom, agent.url, page=valeurs["onglet"], ticket=valeurs["ticket"],
+                                   projet=valeurs["projet"], conversation=valeurs["conversation"],
+                                   question=valeurs["question"], demande=valeurs["demande"], depot=valeurs["depot"],
+                                   contexte=resume)
+            r = Redirection(agent=agent.nom, titre=agent.titre, url=url, resume=resume,
+                            ticket=valeurs["ticket"].upper(), projet=valeurs["projet"], demande=valeurs["demande"],
+                            onglet=valeurs["onglet"], question=valeurs["question"], depot=valeurs["depot"],
+                            conversation=valeurs["conversation"])
             self.redirections.append(r)
             demarrage = " Il est lancé à la demande : l'utilisateur le démarre depuis l'onglet Agents." \
                 if agent.mode == "demande" else ""
-            return _texte(f"Lien vers {agent.titre} ({agent.url}) affiché à l'utilisateur sous ta réponse, avec "
-                          f"ton résumé.{demarrage} Termine ta réponse en une ou deux phrases.")
+            prerempli = [k for k in ("page", "ticket", "projet", "conversation", "question", "demande", "depot")
+                         if k in liens.parametres(agent.nom, page=valeurs["onglet"], ticket=valeurs["ticket"],
+                                                  projet=valeurs["projet"], conversation=valeurs["conversation"],
+                                                  question=valeurs["question"], demande=valeurs["demande"],
+                                                  depot=valeurs["depot"])]
+            ignore = " Onglet inconnu de cet agent : ignoré." if valeurs["onglet"] and "page" not in prerempli else ""
+            return _texte(f"Lien vers {agent.titre} affiché à l'utilisateur sous ta réponse, avec ton résumé"
+                          + (f", prérempli ({', '.join(prerempli)})" if prerempli else "") + f".{ignore}{demarrage} "
+                          "Termine ta réponse en une ou deux phrases.")
 
         return [etat_agents, applications, rediriger]
 

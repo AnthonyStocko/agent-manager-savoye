@@ -52,12 +52,13 @@ manager/migration.py     import, une fois, des .env des agents et des projets d'
 manager/ihm_configuration.py  onglet Configuration
 manager/consignes.py     prompt système de l'assistant (règle de décision)
 manager/routeur.py       assistant : session Agent SDK, outils internes, serveurs MCP des agents
+manager/liens.py         liens de redirection préremplis vers les agents (lot 5)
 manager/ihm_assistant.py onglet Assistant
 manager/evals.py         évaluation de la règle de décision sur tests/evals/decisions.toml
 tests/                   tests unitaires ; tests/faux_agent.py simule un agent Streamlit
 ```
 
-Prévu dans les lots suivants : `manager/liens.py` (liens préremplis), `manager/journal.py`.
+Prévu dans les lots suivants : `manager/journal.py`.
 
 ### Configuration commune
 
@@ -95,11 +96,18 @@ Prévu dans les lots suivants : `manager/liens.py` (liens préremplis), `manager
   applications de la configuration commune.
 - Outils (`manager/routeur.py`), tous en lecture seule ; aucun outil intégré de Claude Code (`tools=[]`),
   `permission_mode="dontAsk"`, `strict_mcp_config`, `setting_sources=[]` :
-  - internes (serveur « manager ») : `etat_agents`, `applications`, `rediriger` (prépare un lien affiché sous la
-    réponse, n'agit pas) ;
+  - internes (serveur « manager ») : `etat_agents`, `applications`, `rediriger` (prépare un lien prérempli affiché
+    sous la réponse, n'agit pas) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
     scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
+- **Liens préremplis** (`manager/liens.py`) : `rediriger` ouvre l'agent au bon endroit avec
+  `?source=manager&page=…&ticket=…&projet=…&conversation=…&question=…&demande=…&depot=…&contexte=…` (onglets
+  connus par agent dans `liens.ONGLETS` ; valeurs invalides retirées, textes bornés). Chaque agent applique le lien
+  une fois par session et ne lance rien : scrum-master (`tools/lien_manager.py` : page, ticket posé dans
+  « Lancement », client Cucumber, question de l'Assistant), odatio (`odatio_agent/lien_manager.py` : projet, tâche,
+  conversation reprise, question), dev-tool (`agent_dev/lien_manager.py` : dépôt cible et demande). Une question ou
+  une demande est PRÉREMPLIE, jamais envoyée sans clic. Aucun secret ni donnée nominative dans un lien.
 - Évals : `tests/evals/decisions.toml` (question → décision et agent attendus), `manager/evals.py`.
 
 ## 4. Glossaire
@@ -155,7 +163,7 @@ Prévu dans les lots suivants : `manager/liens.py` (liens préremplis), `manager
 Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, onglet Agents (fait) · 2 configuration
 commune et migration (fait) · 3 lecture du commun par odatio et scrum-master (fait) · 4 serveurs MCP, routeur, règle
 de décision (fait) ·
-5 liens de redirection préremplis (`?ticket=…&onglet=…`, lus par les agents) · 6 journal, index par ticket,
+5 liens de redirection préremplis (fait) · 6 journal, index par ticket,
 tableau de bord, puis initiatives (point du matin, relances).
 
 ## 7. Questions ouvertes

@@ -48,7 +48,9 @@ Onglet **Assistant** : pose ta question au manager. Selon la règle de décision
   minutes ; la conversation se poursuit ensuite dans Odatio) ;
 - **te redirige** vers le bon agent, avec un lien et un résumé, pour tout ce qui demande une validation, une
   écriture, un travail long ou le job Jenkins (cadrage, chiffrage, patch, tests Cucumber, fichier d'interface…), et
-  vers l'outillage de développement, avec une demande prête à coller, pour faire évoluer un agent.
+  vers l'outillage de développement, avec une demande prête à coller, pour faire évoluer un agent. Le lien ouvre
+  l'agent prérempli : la bonne page, le ticket, l'application, la conversation Odatio à reprendre, la question ou la
+  demande d'évolution. L'agent ne lance rien : c'est toi qui envoies la question ou lances l'analyse.
 
 Il ne modifie jamais rien lui-même. Il utilise le compte Claude de la configuration commune.
 
