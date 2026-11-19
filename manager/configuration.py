@@ -295,3 +295,14 @@ def variables_pour(agent: reg.Agent, dossier: Path = DOSSIER) -> dict:
     variables = {k: v for k, v in commun.acces.items() if v}
     variables.update({k: v for k, v in secrets(dossier).items() if autorise(k, agent.secrets)})
     return {**variables, VARIABLE_LISTE: ",".join(sorted(variables)), VARIABLE_DOSSIER: str(dossier)}
+
+
+def env_claude(dossier: Path = DOSSIER) -> dict:
+    """Variables du compte Claude pour l'assistant du manager (même compte que les agents)."""
+    commun, valeurs = charger(dossier), secrets(dossier)
+    cle = valeurs.get("ANTHROPIC_API_KEY", "")
+    mode = commun.acces.get("CLAUDE_AUTH") or ("cle" if cle else "compte")
+    if mode == "cle" and cle:
+        return {"ANTHROPIC_API_KEY": cle}
+    dossier_compte = commun.acces.get("CLAUDE_CONFIG_DIR", "")
+    return {"CLAUDE_CONFIG_DIR": str(Path(dossier_compte).expanduser())} if dossier_compte else {}

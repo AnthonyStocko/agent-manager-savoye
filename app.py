@@ -1,12 +1,12 @@
 """IHM du manager (port 8500), lancée par le superviseur : ``lancer.bat``.
 
-Onglets : Assistant et Tableau de bord (lots suivants), Agents (état, lancement, arrêt, journal), Configuration
+Onglets : Assistant (questions au manager), Tableau de bord (lot 6), Agents (état, lancement, arrêt, journal), Configuration
 (accès communs, applications, import des réglages des agents, registre).
 """
 
 import streamlit as st
 
-from manager import ihm_configuration
+from manager import ihm_assistant, ihm_configuration
 from manager import superviseur as sup
 from manager.pilote import Pilote, PiloteErreur
 
@@ -60,7 +60,7 @@ def onglet_agents() -> None:
 st.title("🧭 Manager Savoye")
 assistant, tableau, agents, configuration = st.tabs(["Assistant", "Tableau de bord", "Agents", "Configuration"])
 with assistant:
-    st.info("Bientôt : pose ta question ici ; le manager répond, interroge les agents ou te redirige (lot 4).")
+    ihm_assistant.afficher()
 with tableau:
     st.info("Bientôt : tickets en cours, analyses à valider, jobs Jenkins, patchs livrés (lot 6).")
 with agents:
