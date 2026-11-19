@@ -62,10 +62,11 @@ Prévu dans les lots suivants : `manager/consignes.py`, `manager/routeur.py`, `m
 - Noms de variables : **ceux que les agents utilisent déjà** (`JIRA_API_TOKEN`, `BITBUCKET_HTTP_TOKEN`…). Secrets
   d'une application : `DB_PASSWORD_<NOM>`, `APP_PASSWORD_<NOM>`, `SSH_PASSWORD_<NOM>` (convention d'agent-odatio).
 - Au lancement d'un agent, le superviseur ajoute à son environnement : les accès non secrets, les secrets que le
-  registre lui autorise (`secrets`, motifs acceptés) et `SAVOYE_CONFIG_DIR`. Relu à chaque lancement : après une
-  modification, redémarrer l'agent.
-- Tant qu'un agent n'est pas adapté (lot 3), son propre `.env` l'emporte : odatio ne lit l'environnement que
-  pour les secrets absents de son `.env`, et scrum-master recharge son `.env` avec `override=True`.
+  registre lui autorise (`secrets`, motifs acceptés), `SAVOYE_VARIABLES` (la liste de ces variables) et
+  `SAVOYE_CONFIG_DIR`. Relu à chaque lancement : après une modification, redémarrer l'agent.
+- Les agents adaptés (lot 3) font passer les variables de `SAVOYE_VARIABLES` avant leur propre `.env` et ne les
+  y réécrivent pas ; odatio charge aussi les applications de `commun.toml` comme projets. Un agent non adapté
+  garde la priorité à son `.env`.
 - L'import (`migration.py`) complète sans écraser et ne modifie jamais les fichiers des agents.
 
 ### Superviseur

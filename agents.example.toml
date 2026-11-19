@@ -27,8 +27,8 @@ mode = "auto"
 domaine = """Cycle de vie d'un ticket Jira Odatio : intégration du besoin, analyse et cadrage, chiffrage, découpage
 d'épopée, patch Git et release note, tests Cucumber (génération, exécution Jenkins, correction, livraison)."""
 mcp = []
-secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "BITBUCKET_HTTP_TOKEN", "BITBUCKET_WRITE_TOKEN",
-           "JENKINS_API_TOKEN", "GROUNDCOVER_API_KEY"]
+secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN",
+           "BITBUCKET_WRITE_TOKEN", "JENKINS_API_TOKEN", "GROUNDCOVER_API_KEY"]
 
 [[agents]]
 nom = "odatio"

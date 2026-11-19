@@ -7,8 +7,9 @@ Deux fichiers dans ``config/``, jamais versionnés :
 - ``.env`` : les secrets (jetons, clé API, mots de passe des bases, des comptes applicatifs et des logs SSH).
 
 Au lancement d'un agent, le superviseur lui transmet en variables d'environnement les accès non secrets, les
-secrets que le registre lui autorise (champ ``secrets``, motifs acceptés : ``DB_PASSWORD_*``) et
-``SAVOYE_CONFIG_DIR``, le dossier où il peut lire ``commun.toml``. Les noms de variables sont ceux que les agents
+secrets que le registre lui autorise (champ ``secrets``, motifs acceptés : ``DB_PASSWORD_*``), ``SAVOYE_VARIABLES``,
+la liste de ces variables (l'agent les fait passer avant son propre .env), et ``SAVOYE_CONFIG_DIR``, le dossier
+où il peut lire ``commun.toml``. Les noms de variables sont ceux que les agents
 utilisent déjà (``JIRA_API_TOKEN``, ``BITBUCKET_HTTP_TOKEN``…).
 """
 
@@ -26,6 +27,7 @@ DOSSIER = reg.RACINE / "config"
 FICHIER = "commun.toml"
 FICHIER_SECRETS = ".env"
 VARIABLE_DOSSIER = "SAVOYE_CONFIG_DIR"
+VARIABLE_LISTE = "SAVOYE_VARIABLES"     # noms des variables transmises : l'agent les fait passer avant son .env
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,9 @@ ACCES = (
     Acces("JIRA_DOMAIN", "Domaine", "Jira", aide="ex. societe.atlassian.net"),
     Acces("JIRA_EMAIL", "E-mail", "Jira"),
     Acces("JIRA_API_TOKEN", "Jeton API", "Jira", secret=True),
+    Acces("JIRA_READ_EMAIL", "E-mail du compte de lecture", "Jira",
+          aide="facultatif : utilisé par scrum-master pendant les étapes qui ne doivent pas écrire dans Jira"),
+    Acces("JIRA_READ_API_TOKEN", "Jeton du compte de lecture", "Jira", secret=True),
     Acces("BITBUCKET_URL", "Adresse", "Bitbucket", aide="ex. https://git.exemple.io"),
     Acces("BITBUCKET_HTTP_TOKEN", "Jeton de lecture", "Bitbucket", secret=True),
     Acces("BITBUCKET_WRITE_TOKEN", "Jeton d'écriture (Cucumber)", "Bitbucket", secret=True),
@@ -287,7 +292,6 @@ def variables_pour(agent: reg.Agent, dossier: Path = DOSSIER) -> dict:
     """Variables d'environnement d'un agent : accès non secrets, secrets autorisés par le registre (moindre
     privilège) et dossier de la configuration commune."""
     commun = charger(dossier)
-    variables = {VARIABLE_DOSSIER: str(dossier)}
-    variables.update({k: v for k, v in commun.acces.items() if v})
+    variables = {k: v for k, v in commun.acces.items() if v}
     variables.update({k: v for k, v in secrets(dossier).items() if autorise(k, agent.secrets)})
-    return variables
+    return {**variables, VARIABLE_LISTE: ",".join(sorted(variables)), VARIABLE_DOSSIER: str(dossier)}

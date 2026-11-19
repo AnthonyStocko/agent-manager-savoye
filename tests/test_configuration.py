@@ -75,7 +75,8 @@ class TestSecrets(AvecDossier):
                            secrets=("JIRA_API_TOKEN", "DB_PASSWORD_*"))
         variables = conf.variables_pour(odatio, self.dossier)
         self.assertEqual(variables, {"SAVOYE_CONFIG_DIR": str(self.dossier), "JIRA_DOMAIN": "societe.atlassian.net",
-                                     "JIRA_API_TOKEN": "j", "DB_PASSWORD_A": "d"})
+                                     "JIRA_API_TOKEN": "j", "DB_PASSWORD_A": "d",
+                                     "SAVOYE_VARIABLES": "DB_PASSWORD_A,JIRA_API_TOKEN,JIRA_DOMAIN"})
         rien = reg.Agent(nom="dev-tool", titre="d", dossier=self.dossier, port=8503)
         self.assertNotIn("JIRA_API_TOKEN", conf.variables_pour(rien, self.dossier))
 
