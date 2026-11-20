@@ -69,7 +69,7 @@ class TestRouteur(unittest.TestCase):
         self.assertEqual(scrum["args"], [f"{self.dossier}/mcp_lecture.py"])
         self.assertEqual(scrum["env"]["JIRA_API_TOKEN"], "jeton")
         self.assertNotIn("BITBUCKET_WRITE_TOKEN", scrum["env"])                  # moindre privilège
-        self.assertEqual(o.env["CLAUDE_CONFIG_DIR"], "/compte")
+        self.assertEqual(o.env["CLAUDE_CONFIG_DIR"], str(Path("/compte")))
         self.assertIn("MCP_TOOL_TIMEOUT", o.env)
         self.assertIn("odatio — Odatio, http://localhost:8502, lancé avec le manager ; pas d'outil", o.system_prompt)
 

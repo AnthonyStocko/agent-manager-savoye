@@ -2,6 +2,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -57,7 +58,7 @@ class TestJournal(unittest.TestCase):
         self.assertEqual(q.tickets, ["ODA-1"])
         self.assertEqual(evenements[0].details["apres"], "en échec")
         self.assertTrue(self.fichier.exists())
-        with sqlite3.connect(self.fichier) as c:
+        with closing(sqlite3.connect(self.fichier)) as c:
             self.assertEqual(c.execute("PRAGMA journal_mode").fetchone()[0], "wal")
 
     def test_aucune_donnee_nominative_stockee(self):
@@ -67,7 +68,7 @@ class TestJournal(unittest.TestCase):
             redirections=[FausseRedirection("odatio", ticket="ODA-7", projet="client-x-recette", onglet="assistant",
                                             resume="Commande de M. Martin, tél. 0612345678",
                                             question="Commande de M. Martin ?", demande="secret")])
-        with sqlite3.connect(self.fichier) as c:
+        with closing(sqlite3.connect(self.fichier)) as c:
             contenu = " ".join(str(v) for ligne in c.execute("SELECT * FROM evenements") for v in ligne)
         for interdit in ("martin@", "0612345678", "tél.", "secret", "Commande de M. Martin ?"):
             self.assertNotIn(interdit, contenu)
@@ -108,8 +109,9 @@ class TestJournal(unittest.TestCase):
         for i in range(5):
             journal.noter("erreur", extrait=f"e{i}")
         ancien = (datetime.now() - timedelta(days=40)).isoformat(timespec="seconds")
-        with sqlite3.connect(self.fichier) as c:
+        with closing(sqlite3.connect(self.fichier)) as c:
             c.execute("UPDATE evenements SET horodatage = ? WHERE extrait = 'e4'", (ancien,))
+            c.commit()
         self.assertEqual(journal.purger(), 2)        # e4 trop vieux, puis e0 au-delà des 3 plus récentes
         self.assertEqual([e.extrait for e in journal.evenements()], ["e3", "e2", "e1"])
 
