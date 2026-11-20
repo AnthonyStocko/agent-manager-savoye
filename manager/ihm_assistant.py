@@ -1,12 +1,18 @@
-"""Onglet Assistant du manager : questions à l'assistant (routeur.py), réponses et redirections vers les agents."""
+"""Onglet Assistant du manager : questions à l'assistant (routeur.py), réponses et redirections vers les agents.
+
+Chaque réponse (ou échec) est notée dans le journal (journal.py), au mieux : métadonnées et extrait court de la
+question seulement ; une erreur du journal ne bloque jamais la réponse.
+"""
 
 from __future__ import annotations
 
 import asyncio
+import time
 
 import streamlit as st
 
 from manager import configuration as conf
+from manager import journal as jr
 from manager import registre as reg
 from manager import routeur
 
@@ -49,6 +55,17 @@ def _afficher(echange: dict) -> None:
             st.caption(echange["pied"])
 
 
+def noter(question: str, reponse: routeur.Reponse, duree_s: float, journal: jr.Journal | None = None) -> bool:
+    """Note la question et ses redirections dans le journal ; ne lève jamais."""
+    try:
+        return (journal or jr.Journal()).noter_question(
+            question, decision=routeur.decision(reponse)[0], outils=reponse.outils, redirections=reponse.redirections,
+            cout_usd=reponse.cout_usd, tours=reponse.tours, duree_s=round(duree_s, 1),
+            erreur=reponse.message if reponse.erreur else "")
+    except Exception:  # noqa: BLE001 — le journal ne bloque jamais l'IHM
+        return False
+
+
 def afficher() -> None:
     etat = st.session_state
     etat.setdefault("echanges", [])
@@ -82,20 +99,24 @@ def afficher() -> None:
                 consultes.append(_libelle(nom, titres))
                 statut.update(label=consultes[-1] + "…")
                 statut.write(consultes[-1])
+            debut = time.monotonic()
             try:
                 reponse = asyncio.run(routeur.Routeur().demander(question, etat.reprise, sur_outil))
             except (conf.ConfigurationErreur, reg.RegistreErreur) as e:
+                jr.Journal().noter_erreur("assistant", f"configuration : {e}")
                 statut.update(label="Configuration à corriger", state="error")
                 st.error(str(e))
                 etat.echanges.pop()
                 return
             except Exception as e:  # CLI Claude absente, compte non connecté…
+                jr.Journal().noter_erreur("assistant", f"{type(e).__name__} : {e}")
                 statut.update(label="Échec", state="error")
                 st.error(f"Le manager n'a pas pu répondre : {e}. Vérifie le compte Claude dans Configuration › Accès.")
                 etat.echanges.pop()
                 return
             statut.update(label="Terminé" if not reponse.erreur else f"Interrompu : {reponse.message}",
                           state="complete" if not reponse.erreur else "error")
+    noter(question, reponse, time.monotonic() - debut)
     etat.reprise = reponse.session_id or etat.reprise
     cout = f"{reponse.cout_usd:.3f} $" if reponse.cout_usd is not None else "coût inconnu"
     etat.echanges.append({"role": "assistant", "texte": reponse.texte or "(pas de réponse)",

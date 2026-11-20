@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from manager import configuration
+from manager import journal as jr
 from manager import registre as reg
 
 DOSSIER_TMP = reg.RACINE / ".tmp"
@@ -272,6 +273,21 @@ def serveur_commandes(superviseur: Superviseur, port: int, jeton: str) -> Thread
 
 
 # --- point d'entrée --------------------------------------------------------------------------------------------
+def suivre_changements(etats: list[dict], precedent: dict[str, str], journal: jr.Journal | None = None) -> list[dict]:
+    """Agents dont l'état a changé depuis le tour précédent (``precedent`` mis à jour) ; chaque changement est noté
+    dans le journal du manager, au mieux (connexion courte, jamais bloquant)."""
+    changes = []
+    for agent in etats:
+        avant = precedent.get(agent["nom"])
+        if avant != agent["etat"]:
+            precedent[agent["nom"]] = agent["etat"]
+            changes.append(agent)
+            if journal is not None:
+                journal.noter_etat(agent["nom"], avant or "", agent["etat"], agent.get("message", ""))
+    return changes
+
+
+
 def _ouvrir_navigateur(superviseur: Superviseur, port: int, delai: float = 120.0) -> None:
     fin = time.monotonic() + delai
     while time.monotonic() < fin:
@@ -318,14 +334,13 @@ def main(intervalle: float = 5.0) -> int:
     superviseur.demarrer_auto()
     threading.Thread(target=_ouvrir_navigateur, args=(superviseur, registre.port_manager), daemon=True).start()
     precedent: dict[str, str] = {}
+    journal = jr.Journal()
     try:
         while True:
             superviseur.verifier()
-            for agent in superviseur.etat():
-                if precedent.get(agent["nom"]) != agent["etat"]:
-                    precedent[agent["nom"]] = agent["etat"]
-                    detail = f" : {agent['message']}" if agent["message"] else ""
-                    print(f"{time.strftime('%H:%M:%S')} {agent['titre']} ({agent['port']}) {agent['etat']}{detail}")
+            for agent in suivre_changements(superviseur.etat(), precedent, journal):
+                detail = f" : {agent['message']}" if agent["message"] else ""
+                print(f"{time.strftime('%H:%M:%S')} {agent['titre']} ({agent['port']}) {agent['etat']}{detail}")
             time.sleep(intervalle)
     except KeyboardInterrupt:
         print("Arrêt des agents…")
