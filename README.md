@@ -60,7 +60,7 @@ Il ne modifie jamais rien lui-même. Il utilise le compte Claude de la configura
 Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modèle** (aucun coût) :
 
 - **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable, génération Cucumber en
-  cours depuis plus de 6 h ;
+  cours depuis plus de 6 h, patch livré mais NON joint dans Jira ;
 - **Agents** : état résumé (le détail reste dans l'onglet Agents) ;
 - **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses de Scrum
   Master), avec l'état de leur analyse et un bouton qui ouvre Scrum Master sur le ticket ;
@@ -70,7 +70,10 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
   par client, derniers builds ;
 - **Coûts** : questions au manager sur 7 et 30 jours, et consommation de Scrum Master par étape
   (`.tmp/token_usage.csv` de l'agent) ;
-- **Patchs livrés** : pas encore de source fiable (voir `CLAUDE.md`, questions ouvertes).
+- **Patchs livrés** : patchs livrés par Scrum Master ces 7 derniers jours, d'après son registre local des livraisons
+  (outil `patchs`), avec l'état de la pièce jointe Jira (jointe, NON jointe, non vérifiée) et un bouton qui ouvre
+  Scrum Master sur le ticket. Un Scrum Master antérieur à ce registre affiche seulement une invitation à le mettre à
+  jour.
 
 Une source indisponible (superviseur, agent arrêté, serveur MCP en erreur) affiche un message court ; le reste
 s'affiche.

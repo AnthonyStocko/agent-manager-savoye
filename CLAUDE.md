@@ -21,8 +21,8 @@ Ses missions :
    mode « auto » puis l'IHM du manager. Il les surveille, relance un agent tombé et arrête tout à la fermeture.
 2. **Point d'entrée unique** (onglet Assistant) : l'utilisateur pose ses questions au manager, qui applique la
    règle de décision (§ 5).
-3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, coûts, alertes (patchs livrés :
-   pas encore de source, § 7) ; journal des questions, redirections et changements d'état.
+3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, coûts, patchs livrés, alertes ;
+   journal des questions, redirections et changements d'état.
 4. **Configuration partagée** : accès et référentiel des applications Odatio, communs à tous les agents (lot 2 ;
    les agents la liront en priorité au lot 3).
 
@@ -104,10 +104,14 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
 - Index par ticket : table `tickets` (événement → clé) et `etat_tickets` (dernier état de l'analyse scrum-master,
   relevé à chaque rafraîchissement du tableau de bord). `journal.ticket(cle)` ; outil `historique_ticket`.
 - Rétention : 90 jours et 20 000 événements, purge au premier écrit puis au plus une fois par heure.
-- Tableau de bord : `tableau.construire` (0 token) lit le superviseur, le journal, les outils `analyses`, `cucumber`
-  et `builds_jenkins` de scrum-master (un lancement de son serveur MCP par rafraîchissement, résultat en cache 50 s
+- Tableau de bord : `tableau.construire` (0 token) lit le superviseur, le journal, les outils `analyses`, `cucumber`,
+  `builds_jenkins` et `patchs` (7 jours) de scrum-master (un lancement de son serveur MCP par rafraîchissement, résultat en cache 50 s
   pour toutes les sessions) et son `.tmp/token_usage.csv`. Le client MCP est appelé directement
   (`sources.appeler_mcp`, liste blanche d'outils : jamais `question` d'odatio), sans session Claude.
+- Patchs livrés : outil `patchs` de scrum-master (agent-scrum-master#49), adossé à son registre local
+  `.tmp/livraisons.jsonl`, écrit par son étape patch avec l'état de la pièce jointe Jira relu en GET. Un patch NON
+  joint dans Jira lève une alerte ; « non vérifiée » (Jira illisible au moment de la livraison) reste dans le bloc.
+  Un scrum-master sans cet outil (« Unknown tool ») affiche une invitation à le mettre à jour, sans alerte.
 - Formats lus chez scrum-master (contrat, documenté dans `sources.py`) : texte des outils de
   `tools/lecture_manager.py` et colonnes `date`, `ticket`, `etape`, `cout_usd` de `token_usage.csv` (« ; »). Un
   changement de ces formats vide le bloc concerné sans erreur : le signaler dans les deux dépôts.
@@ -126,7 +130,7 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
     dernier état relevé de l'analyse, sans réinterroger les agents, lot 6), `rediriger` (prépare un lien prérempli
     affiché sous la réponse, n'agit pas) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
-    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins), odatio `mcp_server.py --manager`
+    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
 - **Liens préremplis** (`manager/liens.py`) : `rediriger` ouvre l'agent au bon endroit avec
   `?source=manager&page=…&ticket=…&projet=…&conversation=…&question=…&demande=…&depot=…&contexte=…` (onglets
@@ -204,8 +208,8 @@ de décision (fait) ·
   passe toujours `--server.port` : le registre fait foi.
 - Coûts : le journal note le coût de chaque question (lot 6, bloc Coûts du tableau de bord) ; un modèle léger pour
   le routage ? À trancher sur quelques semaines de journal.
-- **Patchs livrés** (tableau de bord) : aucune source fiable en lecture. scrum-master écrit `<TICKET>-*.patch` à sa
-  racine et joint le patch dans Jira, mais ne garde aucune trace locale de livraison ; un fichier présent ne prouve
-  pas la livraison. Proposition : un outil MCP en lecture seule `patchs(jours)` dans scrum-master, adossé à un
-  registre local des livraisons (ticket, date, pièce jointe Jira), à faire dans une PR de scrum-master.
+- **Patchs livrés** : le registre de scrum-master ne couvre que les livraisons faites depuis
+  agent-scrum-master#49 (pas d'historique). Si Jira répond autre chose que 200 à la relecture des pièces jointes, la
+  livraison apparaît « NON jointe » au lieu de « non vérifiée » (`jira_tools.get_jira_attachment_names`, côté
+  scrum-master).
 - Tableau de bord : seul scrum-master est interrogé ; odatio `projets` n'y apporte rien d'utile aujourd'hui.

@@ -12,6 +12,9 @@ Formats lus (contrat avec scrum-master ; un format inattendu donne une liste vid
 - outil ``cucumber`` : ``- <client> : <génération en cours (processus …, lancée le …)|aucune génération en cours>``,
   puis ``Jobs Jenkins : NOM = valeur, …`` ;
 - outil ``builds_jenkins`` : ``<job> :`` puis ``  #<n> <RÉSULTAT|EN COURS> — <début>, <durée> min`` ;
+- outil ``patchs`` (registre local des livraisons, agent-scrum-master#49) : une ligne par livraison
+  ``- <CLE> (livré le AAAA-MM-JJ HH:MM) : <fichier.patch>[, …] — <état>``, état ``en pièce jointe Jira``,
+  ``NON joint dans Jira : <fichiers>`` ou ``pièce jointe non vérifiée (<raison>)`` ;
 - fichier ``<dossier scrum-master>/.tmp/token_usage.csv`` (main.py, TOKEN_USAGE_FIELDS) : séparateur « ; »,
   en-tête, colonnes lues ``date`` (ISO), ``ticket``, ``etape``, ``cout_usd`` (point ou virgule décimale).
 """
@@ -31,7 +34,7 @@ from manager import registre as reg
 
 DELAI_MCP_S = 30.0
 LISTE_BLANCHE = {
-    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins"),
+    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs"),
     "odatio": ("projets",),
 }
 TOKEN_USAGE = Path(".tmp") / "token_usage.csv"
@@ -104,6 +107,8 @@ _ANALYSE = re.compile(r"^- (?P<cle>[A-Z][A-Z0-9_]+-\d+) \(modifiée le (?P<date>
                       r"(?P<a_valider> ← à valider)?$")
 _CLIENT = re.compile(r"^- (?P<client>[^:]+?) : (?P<etat>.+)$")
 _LANCEE = re.compile(r"lancée le (\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?)")
+_PATCH = re.compile(r"^- (?P<cle>[A-Z][A-Z0-9_]+-\d+) \(livré le (?P<date>[\d-]+ [\d:]+)\) : (?P<fichiers>.+?)"
+                    r" — (?P<etat>.+)$")
 _BUILD = re.compile(r"^\s+#(?P<numero>\d+) (?P<resultat>.+?) — (?P<debut>.+?), (?P<duree>\d+) min$")
 
 
@@ -149,6 +154,30 @@ def lire_builds(texte: str) -> list[dict]:
                            "en_cours": m["resultat"] == "EN COURS", "debut": m["debut"],
                            "duree_min": int(m["duree"])})
     return builds
+
+
+def lire_patchs(texte: str) -> list[dict]:
+    """[{cle, livre_le, fichiers, statut, manquants, raison}] depuis l'outil ``patchs`` de scrum-master ; ``statut`` :
+    ``jointe`` (patch en pièce jointe du ticket Jira), ``non_jointe`` (``manquants`` : fichiers absents de Jira),
+    ``non_verifiee`` (Jira non lu : ``raison``). Une ligne d'état inconnu est gardée en ``non_verifiee``."""
+    patchs = []
+    for ligne in (texte or "").splitlines():
+        m = _PATCH.match(ligne.strip())
+        if not m:
+            continue
+        etat = m["etat"].strip()
+        fichiers = [f.strip() for f in m["fichiers"].split(",") if f.strip()]
+        statut, manquants, raison = "non_verifiee", [], etat
+        if etat == "en pièce jointe Jira":
+            statut, raison = "jointe", ""
+        elif etat.startswith("NON joint dans Jira"):
+            statut, raison = "non_jointe", ""
+            manquants = [f.strip() for f in etat.partition(":")[2].split(",") if f.strip()] or fichiers
+        elif etat.startswith("pièce jointe non vérifiée"):
+            raison = etat.removeprefix("pièce jointe non vérifiée").strip().removeprefix("(").removesuffix(")")
+        patchs.append({"cle": m["cle"], "livre_le": m["date"], "fichiers": fichiers, "statut": statut,
+                       "manquants": manquants, "raison": raison})
+    return patchs
 
 
 # --- fichiers locaux des agents ---------------------------------------------------------------------------------
