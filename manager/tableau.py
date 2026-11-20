@@ -1,7 +1,7 @@
 """Tableau de bord du manager (lot 6) : construction des blocs, SANS appel au modèle (0 token).
 
 Sources, toutes en lecture : journal (``journal.py``), superviseur (``Pilote().etat()``), outils MCP de scrum-master
-(``analyses``, ``cucumber``, ``builds_jenkins``, appelés par ``sources.appeler_mcp``) et ``token_usage.csv`` de
+(``analyses``, ``cucumber``, ``builds_jenkins``, ``patchs``, appelés par ``sources.appeler_mcp``) et ``token_usage.csv`` de
 scrum-master. Chaque bloc tolère une source indisponible : il porte alors un message court (``erreur``), les
 autres s'affichent. Ce module ne dépend pas de Streamlit (affichage : ``ihm_tableau.py``).
 """
@@ -24,9 +24,9 @@ ERREURS_HEURES = 24
 GENERATION_BLOQUEE_H = 6
 BUILDS = 3
 ETATS_ALERTE = (sup.ECHEC, sup.INJOIGNABLE, sup.INSTALLATION)
-PATCHS = ("Aucune source fiable des patchs livrés n'est lisible par le manager : scrum-master ne garde pas de "
-          "trace locale de livraison (un fichier .patch à sa racine ne prouve pas qu'il a été livré). "
-          "Voir « Questions ouvertes » dans CLAUDE.md.")
+PATCHS_JOURS = 7
+PATCHS_ABSENT = ("Scrum Master n'a pas encore l'outil patchs (registre des livraisons, agent-scrum-master#49) : "
+                 "le mettre à jour pour voir les patchs livrés.")
 
 
 @dataclass
@@ -67,7 +67,7 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
     except reg.RegistreErreur:
         scrum = None
     t = Tableau(agents=Bloc("Agents"), tickets=Bloc("Tickets en cours"), analyses=Bloc("Analyses à valider"),
-                jenkins=Bloc("Jenkins / Cucumber"), patchs=Bloc("Patchs livrés", note=PATCHS),
+                jenkins=Bloc("Jenkins / Cucumber"), patchs=Bloc(f"Patchs livrés · {PATCHS_JOURS} j"),
                 couts=Bloc("Coûts"), alertes=Bloc("Alertes"), genere_le=maintenant.isoformat(timespec="seconds"))
     alertes = t.alertes.lignes
 
@@ -86,16 +86,18 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
     t.agents.resume = {etat: sum(1 for e in etats if e.get("etat") == etat) for etat in
                        dict.fromkeys(e.get("etat") for e in etats)}
 
-    # --- scrum-master : analyses, cucumber, builds (un seul lancement du serveur MCP) ---------------------------
-    textes, erreur_scrum = {}, ""
+    # --- scrum-master : analyses, cucumber, builds, patchs (un seul lancement du serveur MCP) -------------------
+    textes, erreur_scrum, erreur_patchs = {}, "", ""
     if scrum is None:
         erreur_scrum = "scrum-master absent du registre"
     else:
         try:
-            r = appeler_mcp(scrum, [("analyses", {}), ("cucumber", {}), ("builds_jenkins", {"nombre": BUILDS})])
-            textes = r.textes
-            if r.erreurs:
-                erreur_scrum = " ; ".join(f"{o} : {m}" for o, m in r.erreurs.items())
+            r = appeler_mcp(scrum, [("analyses", {}), ("cucumber", {}), ("builds_jenkins", {"nombre": BUILDS}),
+                                    ("patchs", {"jours": PATCHS_JOURS})])
+            textes, erreurs = r.textes, dict(r.erreurs)
+            erreur_patchs = erreurs.pop("patchs", "")          # rapportée dans son bloc, sans alerte
+            if erreurs:
+                erreur_scrum = " ; ".join(f"{o} : {m}" for o, m in erreurs.items())
         except sources.SourceErreur as e:
             erreur_scrum = str(e)
     if erreur_scrum:
@@ -149,6 +151,20 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
                                 "bloquée ?"})
     else:
         t.jenkins.erreur = erreur_scrum or "Cucumber indisponible"
+
+    # --- patchs livrés (registre des livraisons de scrum-master) -------------------------------------------------
+    if "patchs" in textes:
+        for p in sources.lire_patchs(textes["patchs"]):
+            t.patchs.lignes.append({**p, "lien": _lien(scrum, p["cle"])})
+            if p["statut"] == "non_jointe":
+                alertes.append({"niveau": "attention", "texte": f"{p['cle']} : patch livré le {p['livre_le']} NON "
+                                f"joint dans Jira ({', '.join(p['manquants'])})"})
+        t.patchs.resume = {statut: sum(1 for p in t.patchs.lignes if p["statut"] == statut)
+                           for statut in ("jointe", "non_jointe", "non_verifiee")}
+    elif "unknown tool" in erreur_patchs.lower():               # scrum-master pas encore à jour
+        t.patchs.note = PATCHS_ABSENT
+    else:
+        t.patchs.erreur = (erreur_patchs and f"patchs : {erreur_patchs}"[:300]) or erreur_scrum or "patchs indisponibles"
 
     # --- coûts --------------------------------------------------------------------------------------------------
     try:

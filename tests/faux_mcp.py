@@ -1,5 +1,6 @@
 """Faux serveur MCP (stdio) de scrum-master pour les tests : mêmes outils, textes au format de
-tools/lecture_manager.py, données fictives. Mode « erreur » en argument : l'outil cucumber renvoie une erreur."""
+tools/lecture_manager.py, données fictives. Mode « erreur » en argument : l'outil cucumber renvoie une erreur ;
+mode « ancien » : pas d'outil patchs (scrum-master antérieur au registre des livraisons)."""
 
 import sys
 
@@ -9,6 +10,7 @@ except ImportError:  # pragma: no cover — mcp 1.x
     from mcp.server.fastmcp import FastMCP as Serveur
 
 ERREUR = "erreur" in sys.argv[1:]
+ANCIEN = "ancien" in sys.argv[1:]
 serveur = Serveur("scrum-master")
 
 
@@ -32,9 +34,18 @@ def builds_jenkins(job: str = "", nombre: int = 5) -> str:
     return "Aucun job Jenkins configuré dans l'agent Scrum Master."
 
 
+def patchs(jours: int = 7) -> str:
+    return (f"Patchs livrés ces {jours} derniers jours (agent Scrum Master) :\n"
+            "- ODA-2 (livré le 2026-11-19 16:00) : ODA-2-standard.patch — en pièce jointe Jira")
+
+
 @serveur.tool(description="question coûteuse : ne doit jamais être appelée par le tableau de bord")
 def question(texte: str = "") -> str:
     return "interdit"
+
+
+if not ANCIEN:
+    serveur.tool(description="patchs")(patchs)
 
 
 if __name__ == "__main__":

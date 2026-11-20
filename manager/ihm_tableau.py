@@ -95,6 +95,28 @@ def _jenkins(bloc: tableau.Bloc) -> None:
                        "Durée (min)": b["duree_min"]} for b in builds], hide_index=True, width="stretch")
 
 
+STATUTS_PATCH = {"jointe": "🟢 en pièce jointe Jira", "non_jointe": "🟠 NON joint dans Jira",
+                 "non_verifiee": "⚪ pièce jointe non vérifiée"}
+
+
+def _patchs(bloc: tableau.Bloc) -> None:
+    if not _entete(bloc):
+        if not bloc.erreur and not bloc.note:
+            st.caption("Aucun patch livré sur la période.")
+        return
+    for p in bloc.lignes:
+        gauche, droite = st.columns([5, 1])
+        etat = STATUTS_PATCH.get(p["statut"], p["statut"])
+        if p["statut"] == "non_jointe":
+            etat += " : " + ", ".join(p["manquants"])
+        elif p["statut"] == "non_verifiee" and p["raison"]:
+            etat += f" ({p['raison']})"
+        gauche.markdown(f"**{p['cle']}** · {', '.join(p['fichiers'])}  \n"
+                        f":gray[livré le {p['livre_le']}] · {etat}")
+        if p.get("lien"):
+            droite.link_button("Ouvrir", p["lien"], help="Scrum Master, onglet Lancement, ticket prérempli")
+
+
 def _couts(bloc: tableau.Bloc) -> None:
     _entete(bloc)
     r = bloc.resume
@@ -143,4 +165,4 @@ def afficher() -> None:
         with st.container(border=True):
             _couts(t.couts)
         with st.container(border=True):
-            _entete(t.patchs)
+            _patchs(t.patchs)
