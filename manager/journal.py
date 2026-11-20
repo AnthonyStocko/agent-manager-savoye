@@ -10,6 +10,8 @@
 Index par ticket : table ``tickets`` (événement → clé Jira) et table ``etat_tickets`` (dernier état connu de
 l'analyse scrum-master, relevé par le tableau de bord à chaque rafraîchissement), lus par ``ticket(cle)`` et l'outil ``historique_ticket``.
 
+Point du matin (lot 6 bis) : table ``points`` (une seule ligne, date du dernier « Vu ») et ``bilan(depuis)``.
+
 Règles :
 - écriture AU MIEUX : ``noter*`` ne lève jamais, renvoie False en cas d'échec (base verrouillée, illisible…) ;
 - AUCUNE donnée nominative ni secret : seules des métadonnées et un extrait court de la question, dont les
@@ -79,6 +81,9 @@ CREATE TABLE IF NOT EXISTS etat_tickets (
     analyse TEXT NOT NULL DEFAULT '',
     a_valider INTEGER NOT NULL DEFAULT 0,
     analyse_modifiee TEXT NOT NULL DEFAULT '',
+    vu_le TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS points (
     vu_le TEXT NOT NULL
 );
 """
@@ -248,6 +253,23 @@ class Journal:
                           "vu_le=excluded.vu_le", lignes)
         return self._au_mieux(operation)
 
+    def noter_point(self, quand: str = "") -> bool:
+        """Point du matin marqué « Vu » (une seule ligne gardée). Ne lève jamais."""
+        quand = quand or maintenant()
+        if not DATE.fullmatch(quand):
+            return False
+
+        def operation(c):
+            c.execute("BEGIN IMMEDIATE")
+            try:
+                c.execute("DELETE FROM points")
+                c.execute("INSERT INTO points (vu_le) VALUES (?)", (quand,))
+                c.execute("COMMIT")
+            except BaseException:
+                c.execute("ROLLBACK")
+                raise
+        return self._au_mieux(operation)
+
     # --- rétention ----------------------------------------------------------------------------------------------
     def purger(self) -> int:
         """Supprime les événements plus vieux que la rétention, puis les plus anciens au-delà de LIGNES_MAX.
@@ -352,6 +374,27 @@ class Journal:
                 v.update(analyse=analyse, a_valider=bool(a_valider))
                 v["derniere_activite"] = max(v["derniere_activite"], modifiee)
             return sorted(vus.values(), key=lambda v: v["derniere_activite"], reverse=True)[:limite]
+        return self._lire(operation)
+
+    def dernier_point(self) -> str:
+        """Horodatage ISO du dernier point du matin marqué « Vu », "" s'il n'y en a jamais eu."""
+        return self._lire(lambda c: (c.execute("SELECT MAX(vu_le) FROM points").fetchone() or [""])[0] or "")
+
+    def bilan(self, depuis: str) -> dict:
+        """Activité depuis ``depuis`` (ISO) : {questions, cout_usd, sans_cout, redirections: {agent: n},
+        analyses_a_valider: [{cle, analyse, modifiee}] (analyses passées « à valider » depuis, dernier relevé)}."""
+        def operation(c):
+            n, total, inconnus = c.execute(
+                "SELECT COUNT(*), COALESCE(SUM(cout_usd), 0), SUM(cout_usd IS NULL) FROM evenements "
+                "WHERE type = 'question' AND horodatage >= ?", (depuis,)).fetchone()
+            redirections = dict(c.execute(
+                "SELECT agent, COUNT(*) FROM evenements WHERE type = 'redirection' AND horodatage >= ? "
+                "GROUP BY agent ORDER BY COUNT(*) DESC, agent", (depuis,)).fetchall())
+            analyses = [{"cle": cle, "analyse": analyse, "modifiee": modifiee} for cle, analyse, modifiee in c.execute(
+                "SELECT cle, analyse, analyse_modifiee FROM etat_tickets WHERE a_valider = 1 AND "
+                "analyse_modifiee >= ? ORDER BY analyse_modifiee DESC, cle", (depuis,))]
+            return {"questions": n, "cout_usd": round(total, 4), "sans_cout": inconnus or 0,
+                    "redirections": redirections, "analyses_a_valider": analyses}
         return self._lire(operation)
 
     def couts(self, jours: int) -> dict:

@@ -1,5 +1,7 @@
 """Onglet Tableau de bord du manager (lot 6) : affichage des blocs de ``tableau.py``, sans appel au modèle.
 
+En tête, le point du matin (lot 6 bis, ``initiatives.py``), une fois par jour jusqu'au clic sur « Vu ».
+
 Rafraîchi toutes les RAFRAICHISSEMENT_S secondes (``st.fragment(run_every=…)``). Le calcul est mis en cache
 (CACHE_S) pour toutes les sessions : plusieurs onglets de navigateur ne relancent pas le serveur MCP de scrum-master
 chacun de leur côté.
@@ -9,6 +11,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from manager import initiatives
 from manager import journal as jr
 from manager import registre as reg
 from manager import superviseur as sup
@@ -39,6 +42,28 @@ def _entete(bloc: tableau.Bloc) -> bool:
     if bloc.note:
         st.caption(bloc.note)
     return bool(bloc.lignes or bloc.resume)
+
+
+def _marquer_vu(journal: jr.Journal) -> None:
+    """Rappel du bouton « Vu » : exécuté avant la réexécution, le point n'est donc plus affiché ensuite."""
+    if not journal.noter_point():
+        st.session_state["point_erreur"] = journal.derniere_erreur or "erreur inconnue"
+
+
+def _point(point: initiatives.Point, journal: jr.Journal) -> None:
+    titre, bouton = st.columns([5, 1])
+    periode = (f"ces {initiatives.POINT_JOURS_MAX} derniers jours" if point.premier else
+               f"depuis le {point.depuis[:10]} à {point.depuis[11:16]}")
+    titre.markdown(f"**☀️ Point du matin** · :gray[{periode}]")
+    bouton.button("Vu", width="stretch", help="Masque le point jusqu'à demain", on_click=_marquer_vu,
+                  args=(journal,))
+    if st.session_state.get("point_erreur"):
+        st.caption(f"⚠️ Journal indisponible, point non enregistré : {st.session_state.pop('point_erreur')}")
+    for r in point.rubriques:
+        lignes = [f"[{l['texte']}]({l['lien']})" if l["lien"] else l["texte"] for l in r.lignes]
+        if r.autres:
+            lignes.append(f":gray[… et {r.autres} autre(s)]")
+        st.markdown(f"*{r.titre}*  \n" + "  \n".join(lignes))
 
 
 def _alertes(bloc: tableau.Bloc) -> None:
@@ -149,6 +174,11 @@ def afficher() -> None:
         return
     entete.caption(f"Mis à jour le {t.genere_le.replace('T', ' à ')} · lecture seule, aucun appel au modèle · "
                    f"rafraîchi toutes les {RAFRAICHISSEMENT_S} s")
+    journal = jr.Journal()
+    point = initiatives.point_du_matin(journal, t)
+    if point:
+        with st.container(border=True):
+            _point(point, journal)
     with st.container(border=True):
         _alertes(t.alertes)
     gauche, droite = st.columns(2)

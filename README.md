@@ -59,6 +59,11 @@ Il ne modifie jamais rien lui-même. Il utilise le compte Claude de la configura
 
 Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modèle** (aucun coût) :
 
+- **Point du matin**, en tête, une fois par jour : ce qui s'est passé depuis le dernier clic sur « Vu » (au plus
+  7 jours) : questions au manager et leur coût, redirections, analyses passées « à valider », patchs livrés, builds
+  Cucumber terminés, pannes d'agents et erreurs, avec un lien vers le ticket. « Vu » le masque jusqu'au lendemain ;
+  il ne s'affiche pas s'il n'y a rien de nouveau ;
+
 - **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable, génération Cucumber en
   cours depuis plus de 6 h, patch livré mais NON joint dans Jira ;
 - **Agents** : état résumé (le détail reste dans l'onglet Agents) ;

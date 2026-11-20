@@ -22,7 +22,8 @@ SCRUM = "scrum-master"
 TICKETS_JOURS = 7
 ERREURS_HEURES = 24
 GENERATION_BLOQUEE_H = 6
-BUILDS = 3
+BUILDS = 10              # lus par job (point du matin : builds terminés sur la période)
+BUILDS_AFFICHES = 3      # affichés par job dans le bloc Jenkins
 ETATS_ALERTE = (sup.ECHEC, sup.INJOIGNABLE, sup.INSTALLATION)
 PATCHS_JOURS = 7
 PATCHS_ABSENT = ("Scrum Master n'a pas encore l'outil patchs (registre des livraisons, agent-scrum-master#49) : "
@@ -135,9 +136,15 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
             verrou = "génération en cours (" + ", ".join(c["client"] for c in generations) + "), aucun build en cours"
         else:
             verrou = "libre"
-        t.jenkins.resume = {"verrou": verrou, "proprietaire": "scrum-master", "jobs": cucumber["jobs"]}
+        t.jenkins.resume = {"verrou": verrou, "proprietaire": "scrum-master", "jobs": cucumber["jobs"],
+                            "builds": builds}
+        affiches, par_job = [], {}
+        for b in builds:
+            par_job[b["job"]] = par_job.get(b["job"], 0) + 1
+            if par_job[b["job"]] <= BUILDS_AFFICHES:
+                affiches.append(b)
         t.jenkins.lignes = [{"type": "client", **c, "lien": _lien(scrum, page="cucumber")} for c in cucumber["clients"]] \
-            + [{"type": "build", **b} for b in builds]
+            + [{"type": "build", **b} for b in affiches]
         if "builds_jenkins" not in textes:
             t.jenkins.note = "Builds Jenkins indisponibles."
         for c in generations:
