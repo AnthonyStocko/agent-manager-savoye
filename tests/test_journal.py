@@ -170,6 +170,29 @@ class TestJournal(unittest.TestCase):
             with self.assertRaises(jr.JournalErreur):
                 lecture()
 
+    def test_point_du_matin(self):
+        self.assertEqual(self.journal.dernier_point(), "")
+        self.assertTrue(self.journal.noter_point("2026-11-19T09:00:00"))
+        self.assertTrue(self.journal.noter_point("2026-11-20T08:30:00"))
+        self.assertFalse(self.journal.noter_point("demain"))
+        self.assertEqual(self.journal.dernier_point(), "2026-11-20T08:30:00")
+        with closing(sqlite3.connect(self.fichier)) as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM points").fetchone()[0], 1)     # une seule ligne
+
+    def test_bilan(self):
+        depuis = jr.maintenant()
+        self.journal.noter_question("ODA-1 ?", decision="rediriger", cout_usd=0.5,
+                                    redirections=[FausseRedirection(agent="scrum-master", ticket="ODA-1")])
+        self.journal.noter_question("x", decision="repondre")
+        self.journal.observer_analyses([
+            {"cle": "ODA-1", "libelle": "brouillon", "a_valider": True, "modifiee": "2999-01-01 10:00"},
+            {"cle": "ODA-2", "libelle": "publiée", "a_valider": False, "modifiee": "2999-01-01 10:00"},
+            {"cle": "ODA-3", "libelle": "brouillon", "a_valider": True, "modifiee": "2000-01-01 10:00"}])
+        b = self.journal.bilan(depuis)
+        self.assertEqual((b["questions"], b["cout_usd"], b["sans_cout"]), (2, 0.5, 1))
+        self.assertEqual(b["redirections"], {"scrum-master": 1})
+        self.assertEqual([a["cle"] for a in b["analyses_a_valider"]], ["ODA-1"])
+
     def test_dossier_impossible(self):
         bloquant = self.fichier.parent.parent / "fichier"
         bloquant.parent.mkdir(parents=True, exist_ok=True)

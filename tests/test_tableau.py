@@ -197,6 +197,18 @@ class TestTableau(unittest.TestCase):
         self.assertIn("client-x en cours depuis plus de", alertes)       # génération bloquée (8 h)
         self.assertEqual(self.journal.ticket("ODA-1")["analyse"]["a_valider"], True)   # index alimenté
 
+    def test_builds_lus_et_affiches(self):
+        appels = []
+
+        def mcp(agent, liste):
+            appels.extend(liste)
+            return sources.ResultatMCP(textes={"builds_jenkins": "CUCUMBER-RUN :\n" + "\n".join(
+                f"  #{n} SUCCESS — 2026-11-{n:02d} 10:00, 3 min" for n in range(15, 10, -1))})
+        t = self.construire(appeler_mcp=mcp)
+        self.assertIn(("builds_jenkins", {"nombre": tableau.BUILDS}), appels)
+        self.assertEqual(len(t.jenkins.resume["builds"]), 5)                             # point du matin
+        self.assertEqual([l["numero"] for l in t.jenkins.lignes if l["type"] == "build"], [15, 14, 13])
+
     def test_verrou_libre(self):
         def mcp(agent, appels):
             return sources.ResultatMCP(textes={"analyses": "", "cucumber": "- client-x : aucune génération en cours",

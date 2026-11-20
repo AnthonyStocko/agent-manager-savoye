@@ -22,7 +22,7 @@ Ses missions :
 2. **Point d'entrée unique** (onglet Assistant) : l'utilisateur pose ses questions au manager, qui applique la
    règle de décision (§ 5).
 3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, coûts, patchs livrés, alertes ;
-   journal des questions, redirections et changements d'état.
+   journal des questions, redirections et changements d'état. Point du matin en tête (lot 6 bis).
 4. **Configuration partagée** : accès et référentiel des applications Odatio, communs à tous les agents (lot 2 ;
    les agents la liront en priorité au lot 3).
 
@@ -58,6 +58,7 @@ manager/liens.py         liens de redirection préremplis vers les agents (lot 5
 manager/journal.py       journal SQLite (.tmp/manager.db) : événements, index par ticket, rétention (lot 6)
 manager/sources.py       sources en lecture du tableau de bord : client MCP direct, token_usage.csv (lot 6)
 manager/tableau.py       blocs du tableau de bord, sans Streamlit ni modèle (lot 6)
+manager/initiatives.py   point du matin, sans Streamlit ni modèle (lot 6 bis)
 manager/ihm_tableau.py   onglet Tableau de bord
 manager/ihm_assistant.py onglet Assistant
 manager/evals.py         évaluation de la règle de décision sur tests/evals/decisions.toml
@@ -105,8 +106,8 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   relevé à chaque rafraîchissement du tableau de bord). `journal.ticket(cle)` ; outil `historique_ticket`.
 - Rétention : 90 jours et 20 000 événements, purge au premier écrit puis au plus une fois par heure.
 - Tableau de bord : `tableau.construire` (0 token) lit le superviseur, le journal, les outils `analyses`, `cucumber`,
-  `builds_jenkins` et `patchs` (7 jours) de scrum-master (un lancement de son serveur MCP par rafraîchissement, résultat en cache 50 s
-  pour toutes les sessions) et son `.tmp/token_usage.csv`. Le client MCP est appelé directement
+  `builds_jenkins` (10 derniers builds par job, 3 affichés) et `patchs` (7 jours) de scrum-master (un lancement de
+  son serveur MCP par rafraîchissement, résultat en cache 50 s pour toutes les sessions) et son `.tmp/token_usage.csv`. Le client MCP est appelé directement
   (`sources.appeler_mcp`, liste blanche d'outils : jamais `question` d'odatio), sans session Claude.
 - Patchs livrés : outil `patchs` de scrum-master (agent-scrum-master#49), adossé à son registre local
   `.tmp/livraisons.jsonl`, écrit par son étape patch avec l'état de la pièce jointe Jira relu en GET. Un patch NON
@@ -115,6 +116,12 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
 - Formats lus chez scrum-master (contrat, documenté dans `sources.py`) : texte des outils de
   `tools/lecture_manager.py` et colonnes `date`, `ticket`, `etape`, `cout_usd` de `token_usage.csv` (« ; »). Un
   changement de ces formats vide le bloc concerné sans erreur : le signaler dans les deux dépôts.
+- **Point du matin** (lot 6 bis, `initiatives.point_du_matin`, 0 token) : encadré en tête du Tableau de bord, une
+  fois par jour tant qu'il n'est pas marqué « Vu », et seulement s'il y a du nouveau. Période : depuis le dernier
+  « Vu » (table `points`, une seule ligne), au plus 7 jours. Rubriques : échanges avec le manager (questions, coût,
+  redirections par agent, `journal.bilan`), analyses passées « à valider », patchs livrés, builds Cucumber terminés,
+  pannes d'agents et erreurs. Sources : le journal et le tableau déjà construit, sans nouvel appel aux agents. Ni
+  notification, ni e-mail, ni phrase générée par le modèle, ni tickets Jira modifiés (décision du 20 novembre 2026).
 - Canal de commande : HTTP sur 127.0.0.1:8499, en-tête `X-Jeton` obligatoire ; port et jeton dans
   `.tmp/superviseur.json`, recréé à chaque lancement et supprimé à l'arrêt.
 - Le superviseur lance la commande de l'agent dans son dossier avec son propre venv. Il ne modifie jamais le
@@ -194,8 +201,14 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
 Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, onglet Agents (fait) · 2 configuration
 commune et migration (fait) · 3 lecture du commun par odatio et scrum-master (fait) · 4 serveurs MCP, routeur, règle
 de décision (fait) ·
-5 liens de redirection préremplis (fait) · 6 journal, index par ticket, tableau de bord (fait) · 6 bis initiatives
-(point du matin, relances) : design proposé dans la PR du lot 6, à valider.
+5 liens de redirection préremplis (fait) · 6 journal, index par ticket, tableau de bord (fait) · 6 bis-a point du
+matin (fait) · 6 bis-b relances (à faire, design validé le 20 novembre 2026) : règles évaluées à chaque
+rafraîchissement, affichées dans Alertes avec un lien prérempli et « Ignorer » (table `relances_ignorees`, N jours,
+clé règle + objet + état : la relance revient si l'objet change). Seuils dans `[relances]` de `commun.toml`
+(onglet Configuration), jours ouvrés du lundi au vendredi : analyse à valider non publiée 3 j ouvrés, redirection
+vers scrum-master sans suite 2 j ouvrés, patch NON joint (immédiat), patch non vérifié 1 j, dernier build Cucumber
+en échec (jusqu'à un succès), génération Cucumber 6 h. Les deux alertes existantes (patch NON joint, génération)
+deviennent des relances.
 
 ## 7. Questions ouvertes
 
