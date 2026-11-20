@@ -42,10 +42,12 @@ PURGE_INTERVALLE_S = 3600
 TYPES = ("question", "redirection", "etat", "erreur")
 
 TICKET = re.compile(r"\b[A-Z][A-Z0-9_]+-\d+\b")
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?)?")
 _MASQUES = (
     (re.compile(r"[\w.+-]+@[\w-]+(\.[\w-]+)+"), "[e-mail]"),
     (re.compile(r"https?://\S+"), "[adresse]"),
-    (re.compile(r"(?<![\w-])(\+?\d[\d .-]{7,}\d)(?![\w-])"), "[numéro]"),
+    # téléphone ; une date ISO (2026-11-19 14:58) n'en est pas un
+    (re.compile(r"(?<![\w-])(?!\d{4}-\d{2}-\d{2})(\+?\d[\d .-]{7,}\d)(?![\w-])"), "[numéro]"),
     (re.compile(r"\b(?=[A-Za-z0-9_\-]*\d)(?=[A-Za-z0-9_\-]*[A-Za-z])[A-Za-z0-9_\-]{24,}\b"), "[masqué]"),
     (re.compile(r"(?i)\b(mot de passe|password|pwd|token|jeton|secret)\s*[:=]\s*\S+"), r"\1 [masqué]"),
 )
@@ -233,8 +235,9 @@ class Journal:
         for a in analyses:
             cle = str(a.get("cle", "")).upper()
             if TICKET.fullmatch(cle):
+                modifiee = str(a.get("modifiee", "")).strip().replace(" ", "T")
                 lignes.append((cle, nettoyer(a.get("libelle", ""), MESSAGE_MAX), int(bool(a.get("a_valider"))),
-                               nettoyer(a.get("modifiee", ""), 20).replace(" ", "T"), maintenant()))
+                               modifiee if DATE.fullmatch(modifiee) else "", maintenant()))
         if not lignes:
             return True
 

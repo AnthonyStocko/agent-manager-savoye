@@ -30,6 +30,12 @@ class TestNettoyage(unittest.TestCase):
             self.assertNotIn(interdit, texte)
         self.assertIn("[e-mail]", texte)
 
+    def test_dates_iso_non_masquees(self):
+        self.assertEqual(jr.nettoyer("Publiée dans Jira le 2026-11-19 à 14:58"),
+                         "Publiée dans Jira le 2026-11-19 à 14:58")
+        self.assertIn("2026-11-19T14:58:03", jr.nettoyer("vu le 2026-11-19T14:58:03"))
+        self.assertNotIn("06 12", jr.nettoyer("le 2026-11-19, appeler le 06 12 34 56 78"))
+
     def test_garde_cles_et_borne(self):
         self.assertIn("ODA-1234", jr.nettoyer("Où en est ODA-1234 ?"))
         self.assertLessEqual(len(jr.nettoyer("x" * 1000)), jr.EXTRAIT_MAX)
@@ -98,6 +104,18 @@ class TestJournal(unittest.TestCase):
         recents = {t["cle"]: t for t in self.journal.tickets_recents()}
         self.assertEqual(set(recents), {"ODA-1", "ODA-2"})
         self.assertTrue(recents["ODA-1"]["a_valider"])
+
+    def test_tickets_recents_ignore_analyses_anciennes(self):
+        ancien = (datetime.now() - timedelta(days=40)).strftime("%Y-%m-%d %H:%M")
+        recent = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d %H:%M")
+        self.journal.observer_analyses([{"cle": "ODA-1", "libelle": f"Publiée dans Jira le {ancien}",
+                                         "modifiee": ancien},
+                                        {"cle": "ODA-2", "libelle": "brouillon", "modifiee": recent},
+                                        {"cle": "ODA-3", "libelle": "date illisible", "modifiee": "hier"}])
+        recents = {t["cle"]: t for t in self.journal.tickets_recents(jours=7)}
+        self.assertEqual(set(recents), {"ODA-2"})
+        self.assertEqual(recents["ODA-2"]["derniere_activite"], recent.replace(" ", "T"))
+        self.assertEqual(self.journal.ticket("ODA-1")["analyse"]["analyse"], f"Publiée dans Jira le {ancien}")
 
     def test_couts(self):
         self.journal.noter_question("q1", decision="repondre", cout_usd=0.2)
