@@ -28,7 +28,7 @@ def faux(nom: str, dossier: Path, mode: str = "normal", lancement: str = "auto")
 
 class TestSuperviseur(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.dossier = Path(self.temp.name)
         self.superviseurs: list[sup.Superviseur] = []
 
@@ -148,7 +148,7 @@ class TestSuperviseur(unittest.TestCase):
 
 class TestCanalDeCommande(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         dossier = Path(self.temp.name)
         self.superviseur = sup.Superviseur([faux("odatio", dossier)], dossier_logs=dossier / "logs")
         self.port = port_libre()

@@ -21,7 +21,8 @@ Ses missions :
    mode « auto » puis l'IHM du manager. Il les surveille, relance un agent tombé et arrête tout à la fermeture.
 2. **Point d'entrée unique** (onglet Assistant) : l'utilisateur pose ses questions au manager, qui applique la
    règle de décision (§ 5).
-3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, patchs livrés, alertes.
+3. **Tableau de bord** (lot 6) : tickets en cours, analyses à valider, jobs Jenkins, coûts, alertes (patchs livrés :
+   pas encore de source, § 7) ; journal des questions, redirections et changements d'état.
 4. **Configuration partagée** : accès et référentiel des applications Odatio, communs à tous les agents (lot 2 ;
    les agents la liront en priorité au lot 3).
 
@@ -31,7 +32,8 @@ spécialisés, avec leurs propres validations. Il ne les contourne jamais.
 ## 2. Stack, structure et commandes
 
 - Python 3.12 ; `python` n'est pas dans le PATH de PowerShell : utiliser `py -3.12` ou le venv du dépôt.
-- Streamlit (IHM, port 8500). Claude Agent SDK (assistant), SQLite (lot 6), `tomllib` et `.env`.
+- Streamlit (IHM, port 8500). Claude Agent SDK (assistant), client MCP `mcp` (installé avec le SDK : tableau de
+  bord), SQLite (journal), `tomllib` et `.env`.
 - Installation : `py -3.12 -m venv venv` puis `venv\Scripts\python.exe -m pip install -r requirements.txt`.
 - Lancement : `lancer.bat` (= `venv\Scripts\python.exe -m manager.superviseur`).
 - Tests : `venv\Scripts\python.exe -m unittest discover -s tests` (les tests de l'assistant sont ignorés sans
@@ -53,12 +55,15 @@ manager/ihm_configuration.py  onglet Configuration
 manager/consignes.py     prompt système de l'assistant (règle de décision)
 manager/routeur.py       assistant : session Agent SDK, outils internes, serveurs MCP des agents
 manager/liens.py         liens de redirection préremplis vers les agents (lot 5)
+manager/journal.py       journal SQLite (.tmp/manager.db) : événements, index par ticket, rétention (lot 6)
+manager/sources.py       sources en lecture du tableau de bord : client MCP direct, token_usage.csv (lot 6)
+manager/tableau.py       blocs du tableau de bord, sans Streamlit ni modèle (lot 6)
+manager/ihm_tableau.py   onglet Tableau de bord
 manager/ihm_assistant.py onglet Assistant
 manager/evals.py         évaluation de la règle de décision sur tests/evals/decisions.toml
-tests/                   tests unitaires ; tests/faux_agent.py simule un agent Streamlit
+tests/                   tests unitaires ; tests/faux_agent.py simule un agent Streamlit, tests/faux_mcp.py le
+                         serveur MCP de scrum-master
 ```
-
-Prévu dans les lots suivants : `manager/journal.py`.
 
 ### Configuration commune
 
@@ -85,6 +90,27 @@ Prévu dans les lots suivants : `manager/journal.py`.
   (plus de 3 relances en 10 min), lancé hors superviseur (le port répondait déjà : rien n'est lancé),
   installation incomplète (dossier ou venv absent).
 - Journal de chaque agent : `.tmp/logs/<nom>.log` (sa console y est redirigée).
+- Chaque changement d'état d'un agent est aussi noté dans le journal du manager (`suivre_changements`).
+
+### Journal et tableau de bord (lot 6)
+
+- `.tmp/manager.db`, SQLite, jamais versionné. Deux processus y écrivent (IHM et superviseur) : une connexion
+  courte par opération, mode WAL, `busy_timeout` de 2 s, aucun verrou gardé. Écriture **au mieux** : `noter*` ne
+  lève jamais (False en cas d'échec) ; les lectures lèvent `JournalErreur`, que chaque bloc rattrape.
+- Événements : `question` (extrait nettoyé de 160 caractères, décision, agents et noms d'outils, clés de ticket des
+  entrées d'outils, coût, tours, durée), `redirection` (agent, ticket, projet, onglet), `etat` (avant → après),
+  `erreur`. Jamais les réponses, les entrées d'outils, ni le résumé, la question ou la demande d'une redirection.
+  `journal.nettoyer` masque e-mails, téléphones, adresses web et suites ressemblant à des jetons.
+- Index par ticket : table `tickets` (événement → clé) et `etat_tickets` (dernier état de l'analyse scrum-master,
+  relevé à chaque rafraîchissement du tableau de bord). `journal.ticket(cle)` ; outil `historique_ticket`.
+- Rétention : 90 jours et 20 000 événements, purge au premier écrit puis au plus une fois par heure.
+- Tableau de bord : `tableau.construire` (0 token) lit le superviseur, le journal, les outils `analyses`, `cucumber`
+  et `builds_jenkins` de scrum-master (un lancement de son serveur MCP par rafraîchissement, résultat en cache 50 s
+  pour toutes les sessions) et son `.tmp/token_usage.csv`. Le client MCP est appelé directement
+  (`sources.appeler_mcp`, liste blanche d'outils : jamais `question` d'odatio), sans session Claude.
+- Formats lus chez scrum-master (contrat, documenté dans `sources.py`) : texte des outils de
+  `tools/lecture_manager.py` et colonnes `date`, `ticket`, `etape`, `cout_usd` de `token_usage.csv` (« ; »). Un
+  changement de ces formats vide le bloc concerné sans erreur : le signaler dans les deux dépôts.
 - Canal de commande : HTTP sur 127.0.0.1:8499, en-tête `X-Jeton` obligatoire ; port et jeton dans
   `.tmp/superviseur.json`, recréé à chaque lancement et supprimé à l'arrêt.
 - Le superviseur lance la commande de l'agent dans son dossier avec son propre venv. Il ne modifie jamais le
@@ -96,8 +122,9 @@ Prévu dans les lots suivants : `manager/journal.py`.
   applications de la configuration commune.
 - Outils (`manager/routeur.py`), tous en lecture seule ; aucun outil intégré de Claude Code (`tools=[]`),
   `permission_mode="dontAsk"`, `strict_mcp_config`, `setting_sources=[]` :
-  - internes (serveur « manager ») : `etat_agents`, `applications`, `rediriger` (prépare un lien prérempli affiché
-    sous la réponse, n'agit pas) ;
+  - internes (serveur « manager ») : `etat_agents`, `applications`, `historique_ticket` (journal du manager et
+    dernier état relevé de l'analyse, sans réinterroger les agents, lot 6), `rediriger` (prépare un lien prérempli
+    affiché sous la réponse, n'agit pas) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
     scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
@@ -163,8 +190,8 @@ Prévu dans les lots suivants : `manager/journal.py`.
 Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, onglet Agents (fait) · 2 configuration
 commune et migration (fait) · 3 lecture du commun par odatio et scrum-master (fait) · 4 serveurs MCP, routeur, règle
 de décision (fait) ·
-5 liens de redirection préremplis (fait) · 6 journal, index par ticket,
-tableau de bord, puis initiatives (point du matin, relances).
+5 liens de redirection préremplis (fait) · 6 journal, index par ticket, tableau de bord (fait) · 6 bis initiatives
+(point du matin, relances) : design proposé dans la PR du lot 6, à valider.
 
 ## 7. Questions ouvertes
 
@@ -175,4 +202,10 @@ tableau de bord, puis initiatives (point du matin, relances).
   scrum-master lance depuis sa racine (pas de `.mcp.json`) ; le manager le lance lui-même.
 - Ports : odatio fixe 8502 dans son `.streamlit/config.toml`, scrum-master utilise le défaut 8501. Le superviseur
   passe toujours `--server.port` : le registre fait foi.
-- Coûts : le journal (lot 6) notera le coût de chaque question routée ; un modèle léger pour le routage ?
+- Coûts : le journal note le coût de chaque question (lot 6, bloc Coûts du tableau de bord) ; un modèle léger pour
+  le routage ? À trancher sur quelques semaines de journal.
+- **Patchs livrés** (tableau de bord) : aucune source fiable en lecture. scrum-master écrit `<TICKET>-*.patch` à sa
+  racine et joint le patch dans Jira, mais ne garde aucune trace locale de livraison ; un fichier présent ne prouve
+  pas la livraison. Proposition : un outil MCP en lecture seule `patchs(jours)` dans scrum-master, adossé à un
+  registre local des livraisons (ticket, date, pièce jointe Jira), à faire dans une PR de scrum-master.
+- Tableau de bord : seul scrum-master est interrogé ; odatio `projets` n'y apporte rien d'utile aujourd'hui.

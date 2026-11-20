@@ -1,7 +1,8 @@
 """Assistant du manager : une session Claude Agent SDK qui applique la règle de décision (consignes.py).
 
 Outils, tous en LECTURE SEULE :
-- outils internes (serveur MCP dans le processus, « manager ») : etat_agents, applications, rediriger ;
+- outils internes (serveur MCP dans le processus, « manager ») : etat_agents, applications, historique_ticket
+  (journal du manager, lot 6 : sans réinterroger les agents), rediriger ;
 - serveurs MCP des agents, déclarés dans le registre (champ ``mcp``) et lancés avec leur venv et la configuration
   commune qui leur revient (``configuration.variables_pour``, moindre privilège).
 Aucun outil intégré de Claude Code (ni Bash, ni Read, ni Edit) ; réglages et CLAUDE.md du poste ignorés.
@@ -22,8 +23,10 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from manager import configuration as conf
 from manager import consignes
+from manager import journal as jr
 from manager import liens
 from manager import registre as reg
+from manager import sources
 from manager.pilote import Pilote, PiloteErreur
 
 SERVEUR = "manager"
@@ -65,7 +68,8 @@ def _texte(texte: str, erreur: bool = False) -> dict:
 
 class Routeur:
     def __init__(self, registre: reg.Registre | None = None, dossier_config: Path = conf.DOSSIER,
-                 utilisateur: str = "", simulation: bool = False, pilote: Pilote | None = None):
+                 utilisateur: str = "", simulation: bool = False, pilote: Pilote | None = None,
+                 journal: jr.Journal | None = None):
         """simulation : les appels aux agents sont refusés et seulement notés (évaluation de la règle de décision
         sans faire travailler les agents)."""
         self.registre = registre or reg.charger()
@@ -74,6 +78,7 @@ class Routeur:
         self.utilisateur = utilisateur or getpass.getuser()
         self.simulation = simulation
         self.pilote = pilote or Pilote()
+        self.journal = journal or jr.Journal()
         self.redirections: list = []
         self.simules: list = []
         # agents réellement consultables : serveur MCP déclaré et exécutable présent
@@ -110,6 +115,13 @@ class Routeur:
                               f"{'fichiers' if a.logs.get('dossiers') else ''}"
                               f" · Jira : {a.jira_projet or '—'} · Jenkins : {a.jenkins_job or '—'}")
             return _texte("\n".join(lignes) or "Aucune application dans la configuration commune.")
+
+        @tool("historique_ticket", "Ce que le manager sait déjà d'un ticket Jira (ex. ODA-1234), sans interroger les "
+              "agents : questions posées au manager et redirections (journal), dernier état connu de son analyse "
+              "chez Scrum Master (relevé par le tableau de bord, avec sa date) et coût cumulé connu.",
+              {"type": "object", "properties": {"ticket": {"type": "string"}}, "required": ["ticket"]})
+        async def historique_ticket(args):
+            return _texte(*historique(self.journal, self.registre, str(args.get("ticket") or "")))
 
         onglets = "; ".join(f"{nom} : {', '.join(o)}" for nom, o in liens.ONGLETS.items() if nom in noms)
         @tool("rediriger", "Redirige l'utilisateur vers un agent pour une demande qu'il doit y faire lui-même "
@@ -155,7 +167,7 @@ class Routeur:
                           + (f", prérempli ({', '.join(prerempli)})" if prerempli else "") + f".{ignore}{demarrage} "
                           "Termine ta réponse en une ou deux phrases.")
 
-        return [etat_agents, applications, rediriger]
+        return [etat_agents, applications, historique_ticket, rediriger]
 
     # --- options ------------------------------------------------------------------------------------------------
     def serveurs_agents(self) -> dict:
@@ -226,6 +238,38 @@ class Routeur:
             await client.disconnect()
         reponse.redirections = list(self.redirections)
         return reponse
+
+
+def historique(journal: jr.Journal, registre: reg.Registre, cle: str) -> tuple[str, bool]:
+    """Texte de l'outil historique_ticket et indicateur d'erreur (lecture du journal, 0 token)."""
+    try:
+        vue = journal.ticket(cle)
+    except jr.JournalErreur as e:
+        return f"Historique indisponible : {e}", True
+    lignes = [f"Historique de {vue['cle']} dans le journal du manager (90 jours au plus) :"]
+    if not vue["nb_questions"] and not vue["redirections"] and not vue["analyse"]:
+        lignes.append("- rien n'est noté sur ce ticket.")
+    if vue["nb_questions"]:
+        lignes.append(f"- {vue['nb_questions']} question(s) au manager, dernière activité le "
+                      f"{vue['derniere_activite'].replace('T', ' ')[:16]} :")
+        for e in vue["questions"]:
+            consultes = ", ".join(e.details.get("agents") or []) or "aucun agent"
+            lignes.append(f"  · {e.horodatage.replace('T', ' ')[:16]} « {e.extrait} » → {e.decision or '?'} "
+                          f"({consultes})")
+    for e in vue["redirections"]:
+        onglet = e.details.get("onglet")
+        lignes.append(f"- {e.horodatage.replace('T', ' ')[:16]} redirigé vers {e.agent}"
+                      + (f", onglet {onglet}" if onglet else "") + (f", projet {e.projet}" if e.projet else ""))
+    if vue["analyse"]:
+        a = vue["analyse"]
+        lignes.append(f"- Analyse chez Scrum Master (relevé du {a['vu_le'].replace('T', ' ')[:16]}) : {a['analyse']}"
+                      + (" — à valider" if a["a_valider"] else ""))
+    else:
+        lignes.append("- Aucun état d'analyse relevé par le tableau de bord.")
+    cout_agent = sources.cout_ticket_agent(registre, vue["cle"])
+    lignes.append(f"- Coût connu : {vue['cout_manager_usd']:.3f} $ de questions au manager"
+                  + (f", {cout_agent:.3f} $ chez Scrum Master" if cout_agent is not None else ""))
+    return "\n".join(lignes), False
 
 
 def decision(reponse: Reponse) -> tuple:

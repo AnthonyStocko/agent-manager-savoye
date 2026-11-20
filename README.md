@@ -1,8 +1,8 @@
 # agent-manager-savoye
 
 Le chef d'orchestre de la suite d'agents Savoye : un double-clic lance tous les agents, les surveille et réunit
-leur état dans une seule IHM, et tient la configuration commune (accès, applications Odatio). À venir : un point
-d'entrée unique pour les questions et un tableau de bord. Rôle, règles et décisions : voir `CLAUDE.md`.
+leur état dans une seule IHM, tient la configuration commune (accès, applications Odatio), répond aux questions
+(onglet Assistant) et réunit l'essentiel dans un tableau de bord. Rôle, règles et décisions : voir `CLAUDE.md`.
 
 | Agent | Port | Lancement |
 |---|---|---|
@@ -42,7 +42,8 @@ Journaux : `.tmp/logs/<agent>.log`.
 
 Onglet **Assistant** : pose ta question au manager. Selon la règle de décision, il :
 
-- **répond seul** à une question d'état général (agents en ligne, applications configurées) ;
+- **répond seul** à une question d'état général (agents en ligne, applications configurées) ou d'historique
+  (« qu'est-ce qu'on a fait sur ODA-1234 ? » : il relit son journal sans réinterroger les agents) ;
 - **interroge** les agents en lecture seule pour une question rapide : état d'une analyse ou d'un ticket, génération
   Cucumber ou build Jenkins en cours (Scrum Master), question fonctionnelle sur une application (Odatio, quelques
   minutes ; la conversation se poursuit ensuite dans Odatio) ;
@@ -53,6 +54,30 @@ Onglet **Assistant** : pose ta question au manager. Selon la règle de décision
   demande d'évolution. L'agent ne lance rien : c'est toi qui envoies la question ou lances l'analyse.
 
 Il ne modifie jamais rien lui-même. Il utilise le compte Claude de la configuration commune.
+
+## Tableau de bord
+
+Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modèle** (aucun coût) :
+
+- **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable, génération Cucumber en
+  cours depuis plus de 6 h ;
+- **Agents** : état résumé (le détail reste dans l'onglet Agents) ;
+- **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses de Scrum
+  Master), avec l'état de leur analyse et un bouton qui ouvre Scrum Master sur le ticket ;
+- **Analyses à valider** : analyses de Scrum Master pas encore publiées dans Jira (la validation se fait dans Scrum
+  Master) ;
+- **Jenkins / Cucumber** : verrou du job Cucumber (un seul à la fois, géré par Scrum Master), génération en cours
+  par client, derniers builds ;
+- **Coûts** : questions au manager sur 7 et 30 jours, et consommation de Scrum Master par étape
+  (`.tmp/token_usage.csv` de l'agent) ;
+- **Patchs livrés** : pas encore de source fiable (voir `CLAUDE.md`, questions ouvertes).
+
+Une source indisponible (superviseur, agent arrêté, serveur MCP en erreur) affiche un message court ; le reste
+s'affiche.
+
+**Journal** : `.tmp/manager.db` (SQLite, jamais versionné, 90 jours et 20 000 événements au plus). Il garde des
+métadonnées (décision, agents et outils consultés, ticket, coût, durée, changements d'état des agents) et un extrait
+court de chaque question, sans adresse e-mail, téléphone, adresse web ni secret ; jamais les réponses des agents.
 
 ## Configuration commune
 

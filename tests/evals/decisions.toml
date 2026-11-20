@@ -11,6 +11,10 @@ question = "Quelles applications sont configurées dans le manager ?"
 decision = "repondre"
 
 [[cas]]
+question = "Qu'est-ce qu'on a fait sur ODA-1234 ?"
+decision = "repondre"
+
+[[cas]]
 question = "Où en est l'analyse du ticket ODA-1234 ? Est-elle publiée ?"
 decision = "interroger"
 agent = "scrum-master"
