@@ -11,6 +11,7 @@ Index par ticket : table ``tickets`` (événement → clé Jira) et table ``etat
 l'analyse scrum-master, relevé par le tableau de bord à chaque rafraîchissement), lus par ``ticket(cle)`` et l'outil ``historique_ticket``.
 
 Point du matin (lot 6 bis) : table ``points`` (une seule ligne, date du dernier « Vu ») et ``bilan(depuis)``.
+Relances (lot 6 bis) : table ``relances_ignorees`` (clé de la relance → masquée jusqu'au …), purgée à échéance.
 
 Règles :
 - écriture AU MIEUX : ``noter*`` ne lève jamais, renvoie False en cas d'échec (base verrouillée, illisible…) ;
@@ -85,6 +86,10 @@ CREATE TABLE IF NOT EXISTS etat_tickets (
 );
 CREATE TABLE IF NOT EXISTS points (
     vu_le TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS relances_ignorees (
+    cle TEXT PRIMARY KEY,
+    jusqu_au TEXT NOT NULL
 );
 """
 
@@ -270,6 +275,16 @@ class Journal:
                 raise
         return self._au_mieux(operation)
 
+    def ignorer_relance(self, cle: str, jours: int) -> bool:
+        """Masque une relance ``jours`` jours (clé : règle, objet et état). Ne lève jamais."""
+        cle = str(cle or "").strip()[:MESSAGE_MAX]
+        if not cle or int(jours) < 1:
+            return False
+        jusqu_au = (datetime.now() + timedelta(days=int(jours))).isoformat(timespec="seconds")
+        return self._au_mieux(lambda c: c.execute(
+            "INSERT INTO relances_ignorees (cle, jusqu_au) VALUES (?, ?) ON CONFLICT(cle) DO UPDATE SET "
+            "jusqu_au = excluded.jusqu_au", (cle, jusqu_au)))
+
     # --- rétention ----------------------------------------------------------------------------------------------
     def purger(self) -> int:
         """Supprime les événements plus vieux que la rétention, puis les plus anciens au-delà de LIGNES_MAX.
@@ -283,6 +298,7 @@ class Journal:
                                        "DESC LIMIT 1 OFFSET ?)", (self.lignes_max,)).rowcount
                 c.execute("DELETE FROM tickets WHERE evenement NOT IN (SELECT id FROM evenements)")
                 c.execute("DELETE FROM etat_tickets WHERE vu_le < ?", (limite,))
+                c.execute("DELETE FROM relances_ignorees WHERE jusqu_au < ?", (maintenant(),))
         except (sqlite3.Error, OSError):
             return 0
         self._derniere_purge = time.monotonic()
@@ -375,6 +391,11 @@ class Journal:
                 v["derniere_activite"] = max(v["derniere_activite"], modifiee)
             return sorted(vus.values(), key=lambda v: v["derniere_activite"], reverse=True)[:limite]
         return self._lire(operation)
+
+    def relances_ignorees(self) -> set:
+        """Clés des relances masquées en ce moment."""
+        return self._lire(lambda c: {cle for (cle,) in c.execute(
+            "SELECT cle FROM relances_ignorees WHERE jusqu_au > ?", (maintenant(),))})
 
     def dernier_point(self) -> str:
         """Horodatage ISO du dernier point du matin marqué « Vu », "" s'il n'y en a jamais eu."""

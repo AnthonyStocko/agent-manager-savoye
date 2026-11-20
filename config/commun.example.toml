@@ -11,6 +11,17 @@ JENKINS_USER = "prenom.nom"
 GROUNDCOVER_API_URL = "https://api.groundcover.exemple"
 GROUNDCOVER_BACKEND_ID = "backend-exemple"
 
+# Relances du tableau de bord (facultatif) : seules les valeurs différentes des valeurs par défaut sont utiles.
+# Délais en jours ouvrés (lundi à vendredi) ; 0 désactive une règle à délai.
+[relances]
+analyse_a_valider_jours = 3
+redirection_sans_suite_jours = 2
+patch_non_verifie_jours = 1
+generation_bloquee_heures = 6
+patch_non_joint = true
+build_en_echec = true
+ignorer_jours = 7
+
 # Une application Odatio : secrets associés dans config/.env sous DB_PASSWORD_<NOM>, APP_PASSWORD_<NOM> et
 # SSH_PASSWORD_<NOM> (ex. DB_PASSWORD_CLIENT_X_RECETTE).
 [[applications]]

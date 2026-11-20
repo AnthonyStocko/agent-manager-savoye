@@ -1,6 +1,8 @@
 """Onglet Tableau de bord du manager (lot 6) : affichage des blocs de ``tableau.py``, sans appel au modèle.
 
-En tête, le point du matin (lot 6 bis, ``initiatives.py``), une fois par jour jusqu'au clic sur « Vu ».
+En tête, le point du matin (lot 6 bis, ``initiatives.py``), une fois par jour jusqu'au clic sur « Vu ». Dans le
+bloc Alertes, les relances (lot 6 bis), avec « Ignorer ». Point et relances sont recalculés hors du cache (lecture
+du journal seule), pour qu'un clic sur « Vu » ou « Ignorer » prenne effet tout de suite.
 
 Rafraîchi toutes les RAFRAICHISSEMENT_S secondes (``st.fragment(run_every=…)``). Le calcul est mis en cache
 (CACHE_S) pour toutes les sessions : plusieurs onglets de navigateur ne relancent pas le serveur MCP de scrum-master
@@ -11,6 +13,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from manager import configuration as conf
 from manager import initiatives
 from manager import journal as jr
 from manager import registre as reg
@@ -20,6 +23,7 @@ from manager.pilote import Pilote
 
 RAFRAICHISSEMENT_S = 60
 CACHE_S = 50
+RELANCES_AFFICHEES = 5   # au-delà : dans un dépliant
 PASTILLES = {sup.EN_LIGNE: "🟢", sup.DEMARRAGE: "🟡", sup.EXTERNE: "🔵", sup.ARRETE: "⚪", sup.INJOIGNABLE: "🟠",
              sup.ECHEC: "🔴", sup.INSTALLATION: "🔴"}
 NIVEAUX = {"erreur": "🔴", "attention": "🟠", "info": "🔵"}
@@ -66,12 +70,40 @@ def _point(point: initiatives.Point, journal: jr.Journal) -> None:
         st.markdown(f"*{r.titre}*  \n" + "  \n".join(lignes))
 
 
-def _alertes(bloc: tableau.Bloc) -> None:
-    if not bloc.lignes:
+def _seuils() -> dict:
+    """Seuils des relances de commun.toml ; valeurs par défaut si la configuration est illisible."""
+    try:
+        return conf.charger().seuils()
+    except conf.ConfigurationErreur:
+        return dict(conf.RELANCES)
+
+
+def _ignorer(journal: jr.Journal, cle: str, jours: int) -> None:
+    """Rappel du bouton « Ignorer » : la relance n'est plus affichée dès la réexécution."""
+    if not journal.ignorer_relance(cle, jours):
+        st.session_state["relance_erreur"] = journal.derniere_erreur or "erreur inconnue"
+
+
+def _alertes(bloc: tableau.Bloc, relances: list, journal: jr.Journal, jours: int) -> None:
+    if not bloc.lignes and not relances:
         st.success("Aucune alerte.", icon=":material/check_circle:")
         return
     for a in bloc.lignes:
         st.markdown(f"{NIVEAUX.get(a['niveau'], '🔵')} {a['texte']}")
+    if st.session_state.get("relance_erreur"):
+        st.caption(f"⚠️ Journal indisponible, relance non ignorée : {st.session_state.pop('relance_erreur')}")
+    def relance(r) -> None:
+        gauche, droite = st.columns([5, 1])
+        gauche.markdown("🔔 " + (f"[{r.texte}]({r.lien})" if r.lien else r.texte))
+        droite.button("Ignorer", key=f"ignorer-{r.cle}", width="stretch", on_click=_ignorer,
+                      args=(journal, r.cle, jours), help=f"Masque cette relance {jours} jour(s) ; elle revient si "
+                                                         "la situation change")
+    for r in relances[:RELANCES_AFFICHEES]:
+        relance(r)
+    if len(relances) > RELANCES_AFFICHEES:
+        with st.expander(f"{len(relances) - RELANCES_AFFICHEES} autre(s) relance(s)"):
+            for r in relances[RELANCES_AFFICHEES:]:
+                relance(r)
 
 
 def _agents(bloc: tableau.Bloc) -> None:
@@ -180,7 +212,8 @@ def afficher() -> None:
         with st.container(border=True):
             _point(point, journal)
     with st.container(border=True):
-        _alertes(t.alertes)
+        seuils = _seuils()
+        _alertes(t.alertes, initiatives.relances(journal, t, seuils), journal, seuils["ignorer_jours"])
     gauche, droite = st.columns(2)
     with gauche:
         with st.container(border=True):

@@ -1,12 +1,17 @@
-"""Initiatives du manager (lot 6 bis) : point du matin, SANS appel au modèle (0 token), en lecture seule.
+"""Initiatives du manager (lot 6 bis) : point du matin et relances, SANS appel au modèle (0 token), en lecture seule.
 
 Le point du matin résume ce qui s'est passé depuis le dernier « Vu » (au plus POINT_JOURS_MAX jours) : échanges avec
 le manager, analyses passées « à valider », patchs livrés, builds Cucumber terminés, pannes d'agents et erreurs.
 Il s'affiche une fois par jour, tant que le point du jour n'a pas été marqué « Vu », et seulement s'il y a du nouveau.
 
-Sources : le journal (``bilan``, ``evenements``) et le tableau de bord déjà construit (``tableau.construire``), sans
-nouvel appel aux agents. Rien n'est envoyé hors du manager : pas de notification, pas d'e-mail. Ce module ne dépend
-pas de Streamlit (affichage : ``ihm_tableau.py``).
+Les relances sont des règles évaluées à chaque affichage du tableau de bord (seuils : ``configuration.RELANCES`` et
+``[relances]`` de commun.toml, délais en jours ouvrés). Chacune porte un lien prérempli vers l'agent et une clé
+(règle, objet, état) : « Ignorer » la masque quelques jours, et elle revient d'elle-même si l'objet change. Aucune
+action automatique : la relance ne fait que montrer où agir.
+
+Sources : le journal (``bilan``, ``evenements``, ``ticket``) et le tableau de bord déjà construit
+(``tableau.construire``), sans nouvel appel aux agents. Rien n'est envoyé hors du manager : pas de notification, pas
+d'e-mail. Ce module ne dépend pas de Streamlit (affichage : ``ihm_tableau.py``).
 """
 
 from __future__ import annotations
@@ -14,7 +19,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
+from manager import configuration as conf
 from manager import journal as jr
+from manager import liens as lk
 from manager import tableau as tb
 
 POINT_JOURS_MAX = 7
@@ -122,3 +129,135 @@ def point_du_matin(journal: jr.Journal, t: tb.Tableau, maintenant: datetime | No
         rubriques.append(_rubrique("Pannes et erreurs", incidents))
 
     return Point(depuis=depuis, premier=not dernier, rubriques=rubriques) if rubriques else None
+
+
+# --- relances ---------------------------------------------------------------------------------------------------
+REDIRECTIONS_JOURS = 30          # redirections examinées pour « sans suite »
+ECHECS = ("FAILURE", "UNSTABLE")
+URGENCE = ("patch_non_joint", "build_en_echec", "generation_bloquee_heures", "patch_non_verifie_jours",
+           "redirection_sans_suite_jours", "analyse_a_valider_jours")     # ordre d'affichage
+
+
+@dataclass
+class Relance:
+    regle: str                   # clé de configuration.RELANCES
+    cle: str                     # règle, objet et état : « Ignorer » ne masque que cet état-là
+    texte: str
+    lien: str = ""
+
+
+def ajouter_jours_ouvres(debut: datetime, jours: int) -> datetime:
+    """``debut`` + ``jours`` jours ouvrés (lundi à vendredi, sans jours fériés), à la même heure."""
+    fin, restants = debut, jours
+    while restants > 0:
+        fin += timedelta(days=1)
+        if fin.weekday() < 5:
+            restants -= 1
+    return fin
+
+
+def _date(texte: str) -> datetime | None:
+    try:
+        return datetime.fromisoformat(_iso(texte))
+    except ValueError:
+        return None
+
+
+def _echu(texte: str, jours: int, maintenant: datetime) -> datetime | None:
+    """Date de ``texte`` si le délai de ``jours`` jours ouvrés est dépassé ; None sinon (ou date illisible)."""
+    debut = _date(texte)
+    return debut if debut and jours > 0 and ajouter_jours_ouvres(debut, jours) <= maintenant else None
+
+
+def _jour(d: datetime) -> str:
+    return d.strftime("%Y-%m-%d %H:%M")
+
+
+def _url_scrum(t: tb.Tableau) -> str:
+    return next((a.get("url", "") for a in t.agents.lignes if a.get("nom") == tb.SCRUM), "")
+
+
+def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
+           maintenant: datetime | None = None) -> list[Relance]:
+    """Toutes les relances actives, ignorées comprises. Ne lève pas : une source illisible ne donne rien."""
+    s = {**conf.RELANCES, **(seuils or {})}
+    maintenant = maintenant or datetime.now()
+    url, liens = _url_scrum(t), _liens(t)
+
+    def lien(cle: str = "", page: str = "lancement") -> str:
+        if url:
+            return lk.construire(tb.SCRUM, url, page=page, ticket=cle)
+        return liens.get(cle, "") if cle else ""
+
+    relances = []
+    # analyse à valider non publiée
+    for a in t.analyses.lignes:
+        debut = _echu(a["modifiee"], s["analyse_a_valider_jours"], maintenant)
+        if debut:
+            relances.append(Relance("analyse_a_valider_jours", f"analyse:{a['cle']}:{_iso(a['modifiee'])}",
+                                    f"{a['cle']} : analyse à valider depuis le {_jour(debut)}, non publiée dans Jira",
+                                    a.get("lien") or lien(a["cle"])))
+
+    # ticket redirigé vers scrum-master, analyse non modifiée depuis
+    if s["redirection_sans_suite_jours"] > 0:
+        try:
+            depuis = (maintenant - timedelta(days=REDIRECTIONS_JOURS)).isoformat(timespec="seconds")
+            vues = {}
+            for e in journal.evenements(depuis=depuis, types=("redirection",), limite=500):
+                if e.agent == tb.SCRUM and e.ticket and e.ticket not in vues:
+                    vues[e.ticket] = e.horodatage                        # la plus récente par ticket
+            for cle, quand in vues.items():
+                debut = _echu(quand, s["redirection_sans_suite_jours"], maintenant)
+                if debut and journal.ticket(cle)["analyse"].get("analyse_modifiee", "") < quand:
+                    relances.append(Relance("redirection_sans_suite_jours", f"redirection:{cle}:{quand}",
+                                            f"{cle} : redirigé vers Scrum Master le {_jour(debut)}, analyse non "
+                                            "modifiée depuis", lien(cle)))
+        except jr.JournalErreur:
+            pass
+
+    # patchs livrés : NON joints, ou pièce jointe non vérifiée
+    for p in t.patchs.lignes:
+        cle_p = f"{p['cle']}:{_iso(p['livre_le'])}"
+        if p["statut"] == "non_jointe" and s["patch_non_joint"]:
+            relances.append(Relance("patch_non_joint", f"patch_non_joint:{cle_p}",
+                                    f"{p['cle']} : patch livré le {p['livre_le']} NON joint dans Jira "
+                                    f"({', '.join(p['manquants'])})", p.get("lien") or lien(p["cle"])))
+        elif p["statut"] == "non_verifiee" and _echu(p["livre_le"], s["patch_non_verifie_jours"], maintenant):
+            relances.append(Relance("patch_non_verifie_jours", f"patch_non_verifie:{cle_p}",
+                                    f"{p['cle']} : pièce jointe du patch livré le {p['livre_le']} non vérifiée "
+                                    f"({p['raison'] or 'raison inconnue'}) : la contrôler dans Jira",
+                                    p.get("lien") or lien(p["cle"])))
+
+    # dernier build terminé de chaque job en échec, jusqu'à un build réussi
+    if s["build_en_echec"]:
+        vus = set()
+        for b in t.jenkins.resume.get("builds", []):                 # du plus récent au plus ancien
+            if b["en_cours"] or b["job"] in vus:
+                continue
+            vus.add(b["job"])
+            if b["resultat"] in ECHECS:
+                relances.append(Relance("build_en_echec", f"build:{b['job']}:{b['numero']}",
+                                        f"Cucumber : dernier build {b['job']} #{b['numero']} en échec "
+                                        f"({b['resultat']}, {b['debut']})", lien(page="cucumber")))
+
+    # génération Cucumber en cours depuis trop longtemps
+    heures = s["generation_bloquee_heures"]
+    for c in t.jenkins.lignes:
+        debut = _date(c.get("depuis", "")) if c.get("type") == "client" and c.get("en_cours") else None
+        if heures > 0 and debut and maintenant - debut > timedelta(hours=heures):
+            relances.append(Relance("generation_bloquee_heures", f"generation:{c['client']}:{c['depuis']}",
+                                    f"Génération Cucumber de {c['client']} en cours depuis plus de {heures} h "
+                                    f"({_jour(debut)}) : bloquée ?", c.get("lien") or lien(page="cucumber")))
+    return relances
+
+
+def relances(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
+             maintenant: datetime | None = None) -> list[Relance]:
+    """Relances à afficher, de la plus urgente à la moins urgente (URGENCE) : ``regles`` sans celles que
+    l'utilisateur a ignorées (toutes si le journal est illisible)."""
+    actives = regles(journal, t, seuils, maintenant)
+    try:
+        ignorees = journal.relances_ignorees()
+    except jr.JournalErreur:
+        ignorees = set()
+    return sorted((r for r in actives if r.cle not in ignorees), key=lambda r: URGENCE.index(r.regle))

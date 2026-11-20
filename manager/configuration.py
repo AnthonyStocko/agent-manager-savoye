@@ -3,7 +3,8 @@
 Deux fichiers dans ``config/``, jamais versionnés :
 
 - ``commun.toml`` (sans secret) : les accès partagés (Jira, Bitbucket, Jenkins, groundcover, compte Claude) et le
-  référentiel des applications Odatio (sources, base, logs, application web, projet Jira, job Jenkins) ;
+  référentiel des applications Odatio (sources, base, logs, application web, projet Jira, job Jenkins), et les
+  seuils des relances du tableau de bord (``[relances]``, lus par le manager seul) ;
 - ``.env`` : les secrets (jetons, clé API, mots de passe des bases, des comptes applicatifs et des logs SSH).
 
 Au lancement d'un agent, le superviseur lui transmet en variables d'environnement les accès non secrets, les
@@ -62,6 +63,18 @@ ACCES = (
 NON_SECRETS = tuple(a.variable for a in ACCES if not a.secret)
 SECRETS = tuple(a.variable for a in ACCES if a.secret)
 
+# Relances du tableau de bord (lot 6 bis-b) : seuils par défaut, remplacés par la section [relances] de commun.toml.
+# Délais en jours ouvrés (lundi à vendredi) ; 0 désactive une règle à délai.
+RELANCES = {
+    "analyse_a_valider_jours": 3,         # analyse à valider non publiée
+    "redirection_sans_suite_jours": 2,    # ticket redirigé vers scrum-master, analyse non modifiée depuis
+    "patch_non_verifie_jours": 1,         # pièce jointe d'un patch livré non vérifiée (Jira illisible)
+    "generation_bloquee_heures": 6,       # génération Cucumber en cours (heures)
+    "patch_non_joint": True,              # patch livré NON joint dans Jira (immédiat)
+    "build_en_echec": True,               # dernier build Cucumber d'un job en échec, jusqu'à un succès
+    "ignorer_jours": 7,                   # durée du masquage par « Ignorer » (jours calendaires, au moins 1)
+}
+
 _NOM = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 _VARIABLE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
@@ -107,6 +120,11 @@ class Application:
 class Commun:
     acces: dict = field(default_factory=dict)            # variables non secrètes
     applications: list = field(default_factory=list)     # [Application]
+    relances: dict = field(default_factory=dict)         # seuils différents des valeurs par défaut (RELANCES)
+
+    def seuils(self) -> dict:
+        """Seuils des relances : valeurs par défaut, remplacées par celles de commun.toml."""
+        return {**RELANCES, **self.relances}
 
     def application(self, nom: str) -> Application:
         for a in self.applications:
@@ -142,10 +160,14 @@ def lire(donnees: dict) -> Commun:
                    for s in brut.get("sources", [])]
         champs = {k: v for k, v in brut.items() if k in Application.__dataclass_fields__ and k != "sources"}
         applications.append(Application(**champs, sources=sources))
-    commun = Commun(acces=acces, applications=applications)
+    relances = donnees.get("relances", {})
+    if not isinstance(relances, dict):
+        raise ConfigurationErreur("relances : une table [relances] est attendue dans commun.toml")
+    commun = Commun(acces=acces, applications=applications, relances=dict(relances))
     erreurs = verifier(commun)
     if erreurs:
         raise ConfigurationErreur("configuration commune invalide :\n- " + "\n- ".join(erreurs))
+    commun.relances = {k: v for k, v in commun.relances.items() if v != RELANCES[k]}   # types déjà vérifiés
     return commun
 
 
@@ -160,6 +182,15 @@ def verifier(commun: Commun) -> list:
         for i, s in enumerate(a.sources, start=1):
             if bool(s.depot) == bool(s.chemin):
                 erreurs.append(f"« {a.nom} », source n° {i} : un dépôt ou un dossier local, pas les deux ni aucun")
+    for cle, valeur in commun.relances.items():
+        if cle not in RELANCES:
+            erreurs.append(f"relances : seuil inconnu « {cle} » (connus : {', '.join(RELANCES)})")
+        elif isinstance(RELANCES[cle], bool):
+            if not isinstance(valeur, bool):
+                erreurs.append(f"relances : « {cle} » doit valoir true ou false")
+        elif isinstance(valeur, bool) or not isinstance(valeur, int) or valeur < (1 if cle == "ignorer_jours" else 0):
+            erreurs.append(f"relances : « {cle} » doit être un entier "
+                           f"{'supérieur ou égal à 1' if cle == 'ignorer_jours' else 'positif ou nul'}")
     return erreurs
 
 
@@ -168,7 +199,10 @@ def enregistrer(commun: Commun, dossier: Path = DOSSIER) -> None:
     if erreurs:
         raise ConfigurationErreur("configuration commune invalide :\n- " + "\n- ".join(erreurs))
     donnees = {"acces": {k: v for k, v in commun.acces.items() if k in NON_SECRETS and v},
+               "relances": {k: v for k, v in commun.relances.items() if RELANCES.get(k) != v},
                "applications": [_application_en_dict(a) for a in commun.applications]}
+    if not donnees["relances"]:
+        del donnees["relances"]
     dossier.mkdir(parents=True, exist_ok=True)
     entete = ("# Configuration commune des agents Savoye, tenue par le manager (onglet Configuration).\n"
               "# Aucun secret ici : ils sont dans config/.env. Fichier non versionné.\n\n")
