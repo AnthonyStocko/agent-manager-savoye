@@ -7,7 +7,7 @@ lecture, sans appel au modèle), Agents (état, lancement, arrêt, journal), Con
 
 import streamlit as st
 
-from manager import ihm_assistant, ihm_configuration, ihm_connaissances, ihm_questions, ihm_tableau
+from manager import ihm_assistant, ihm_configuration, ihm_connaissances, ihm_questions, ihm_tableau, ihm_travaux
 from manager import superviseur as sup
 from manager.pilote import Pilote, PiloteErreur
 
@@ -64,6 +64,7 @@ assistant, tableau, agents, questions, connaissances, configuration = st.tabs(
 with assistant:
     ihm_assistant.afficher()
 with tableau:
+    ihm_travaux.afficher()
     ihm_tableau.afficher()
 with agents:
     onglet_agents()
