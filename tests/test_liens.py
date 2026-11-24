@@ -12,10 +12,18 @@ class TestLiens(unittest.TestCase):
     def test_lien_prerempli(self):
         url = liens.construire("scrum-master", "http://localhost:8501", page="cucumber", ticket="oda-12",
                                projet="client-x-recette", contexte="Lancer les tests Cucumber du ticket.")
-        self.assertTrue(url.startswith("http://localhost:8501/?source=manager&page=cucumber"))
+        # Onglet Cucumber d'agent-scrum-master : directement agent-cucumber (registre)
+        self.assertTrue(url.startswith("http://localhost:8507/?source=manager&page=cucumber"))
         self.assertEqual(params(url), {"source": "manager", "page": "cucumber", "ticket": "ODA-12",
                                        "projet": "client-x-recette",
                                        "contexte": "Lancer les tests Cucumber du ticket."})
+
+    def test_redirection_sans_agent_au_registre(self):
+        """Agent cible absent du registre : agent-scrum-master, qui renvoie lui-même vers l'agent."""
+        url = liens.construire("scrum-master", "http://localhost:8501", urls={}, page="lancement", ticket="ODA-3")
+        self.assertTrue(url.startswith("http://localhost:8501/?source=manager&page=lancement"))
+        self.assertEqual(liens.rediriger("scrum-master", "u", "revue", {"revue-pr": "http://localhost:8508"}),
+                         ("revue-pr", "http://localhost:8508", ""))
 
     def test_valeurs_invalides_retirees(self):
         p = liens.parametres("odatio", page="cucumber", ticket="pas un ticket", projet="a/b?c=d",

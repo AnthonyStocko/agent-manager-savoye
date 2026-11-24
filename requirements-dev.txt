@@ -1,0 +1,1 @@
+pytest>=8   # tests repris d'agent-scrum-master (format pytest) ; unittest reste valable pour les autres

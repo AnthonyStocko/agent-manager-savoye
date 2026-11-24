@@ -1,2 +1,5 @@
 streamlit==1.66.1
 claude-agent-sdk>=0.2
+python-dotenv>=1.0          # agent-socle (Assistant des agents, Connaissances, webhook)
+# Socle commun des agents (seule dépendance interne) : pip install --no-deps -e ../agent-socle pendant le chantier,
+# puis agent-socle @ git+https://github.com/AnthonyStocko/agent-socle.git@v0.6.0

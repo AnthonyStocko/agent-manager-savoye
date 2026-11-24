@@ -7,7 +7,7 @@ lecture, sans appel au modèle), Agents (état, lancement, arrêt, journal), Con
 
 import streamlit as st
 
-from manager import ihm_assistant, ihm_configuration, ihm_tableau
+from manager import ihm_assistant, ihm_configuration, ihm_connaissances, ihm_questions, ihm_tableau
 from manager import superviseur as sup
 from manager.pilote import Pilote, PiloteErreur
 
@@ -59,12 +59,17 @@ def onglet_agents() -> None:
 
 
 st.title("🧭 Manager Savoye")
-assistant, tableau, agents, configuration = st.tabs(["Assistant", "Tableau de bord", "Agents", "Configuration"])
+assistant, tableau, agents, questions, connaissances, configuration = st.tabs(
+    ["Assistant", "Tableau de bord", "Agents", "Assistant des agents", "Connaissances partagées", "Configuration"])
 with assistant:
     ihm_assistant.afficher()
 with tableau:
     ihm_tableau.afficher()
 with agents:
     onglet_agents()
+with questions:
+    ihm_questions.afficher()
+with connaissances:
+    ihm_connaissances.afficher()
 with configuration:
     ihm_configuration.afficher()

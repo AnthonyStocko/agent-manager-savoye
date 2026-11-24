@@ -26,7 +26,7 @@ port = 8501
 mode = "auto"
 domaine = """Cycle de vie d'un ticket Jira Odatio : intégration du besoin, analyse et cadrage, chiffrage, découpage
 d'épopée, patch Git et release note, tests Cucumber (génération, exécution Jenkins, correction, livraison)."""
-mcp = ["{python}", "{dossier}/mcp_lecture.py"]
+mcp = ["{python}", "{dossier}/../agent-manager-savoye/mcp_lecture.py"]   # lecteur repris par le manager
 secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN",
            "BITBUCKET_WRITE_TOKEN", "JENKINS_API_TOKEN", "GROUNDCOVER_API_KEY"]
 
@@ -53,3 +53,72 @@ domaine = """Évolution du code des agents (dont le manager) : analyse, plan, d�
 isolé, PR ; extraction et comparaison des prompts et outils d'un agent."""
 mcp = []
 secrets = ["ANTHROPIC_API_KEY"]
+
+[[agents]]
+nom = "projets"
+titre = "Projets et connexions"
+dossier = "../agent-projets"
+port = 8504
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Registre des projets (projets Cucumber et applications du manager, en lecture), tests de
+connexion (base, groundcover, MCP, répertoire partagé) ; API locale en lecture (8512)."""
+mcp = []
+secrets = []
+
+[[agents]]
+nom = "integration"
+titre = "Intégration du besoin"
+dossier = "../agent-integration"
+port = 8505
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Reformulation du besoin d'un ticket Jira et questions ouvertes publiées dans sa description,
+puis cadrage complété par les réponses."""
+mcp = []
+secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN"]
+
+[[agents]]
+nom = "lancement"
+titre = "Lancement d'un ticket"
+dossier = "../agent-lancement"
+port = 8506
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Analyse et cadrage d'un ticket, chiffrage, révision, découpage d'épopée, validation et
+publication dans Jira, patch Git et release note."""
+mcp = []
+secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN", "GROUNDCOVER_API_KEY"]
+
+[[agents]]
+nom = "cucumber"
+titre = "Tests Cucumber"
+dossier = "../agent-cucumber"
+port = 8507
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Tests Cucumber d'un client : génération, exécution Jenkins, correction, livraison ;
+post-merge et remise de configuration."""
+mcp = []
+secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN", "BITBUCKET_WRITE_TOKEN", "JENKINS_API_TOKEN", "GROUNDCOVER_API_KEY"]
+
+[[agents]]
+nom = "revue-pr"
+titre = "Revue de PR"
+dossier = "../agent-revue-pr"
+port = 8508
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Relecture assistée des pull requests Bitbucket d'une fonctionnalité (lecture seule)."""
+mcp = []
+secrets = ["ANTHROPIC_API_KEY", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"]
