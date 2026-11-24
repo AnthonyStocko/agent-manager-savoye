@@ -181,7 +181,7 @@ class TestTableau(unittest.TestCase):
         self.assertEqual(self.appels, [("scrum-master", ["analyses", "cucumber", "builds_jenkins", "patchs"])])
         self.assertEqual(t.agents.resume, {sup.EN_LIGNE: 1, sup.ECHEC: 1})
         self.assertEqual([a["cle"] for a in t.analyses.lignes], ["ODA-1", "ODA-3"])
-        self.assertIn("page=lancement", t.analyses.lignes[0]["lien"])
+        self.assertIn("localhost:8506", t.analyses.lignes[0]["lien"])   # onglet Lancement : agent-lancement
         self.assertIn("ticket=ODA-1", t.analyses.lignes[0]["lien"])
         self.assertIn("ODA-9", [x["cle"] for x in t.tickets.lignes])
         self.assertTrue(t.jenkins.resume["verrou"].startswith("occupé : CUCUMBER-RUN #12"))

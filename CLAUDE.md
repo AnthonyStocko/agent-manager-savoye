@@ -36,7 +36,8 @@ spécialisés, avec leurs propres validations. Il ne les contourne jamais.
   bord), SQLite (journal), `tomllib` et `.env`.
 - Installation : `py -3.12 -m venv venv` puis `venv\Scripts\python.exe -m pip install -r requirements.txt`.
 - Lancement : `lancer.bat` (= `venv\Scripts\python.exe -m manager.superviseur`).
-- Tests : `venv\Scripts\python.exe -m unittest discover -s tests` (les tests de l'assistant sont ignorés sans
+- Tests : `venv\Scripts\python.exe -m pytest -q` (requirements-dev.txt ; les tests unittest y passent aussi) ou
+  `venv\Scripts\python.exe -m unittest discover -s tests` (tests unittest seuls) (les tests de l'assistant sont ignorés sans
   `claude-agent-sdk`). Aucun linter.
 - Évaluation de la règle de décision : `venv\Scripts\python.exe -m manager.evals` (simulation : les agents ne sont
   pas interrogés ; `--reel` pour les interroger). Coûte un appel au modèle par cas.
@@ -58,6 +59,10 @@ manager/liens.py         liens de redirection préremplis vers les agents (lot 5
 manager/journal.py       journal SQLite (.tmp/manager.db) : événements, index par ticket, rétention (lot 6)
 manager/sources.py       sources en lecture du tableau de bord : client MCP direct, token_usage.csv (lot 6)
 manager/tableau.py       blocs du tableau de bord, sans Streamlit ni modèle (lot 6)
+main.py                  CLI --step ask : assistant des agents (repris d'agent-scrum-master, qui y délègue)
+manager/assistant.py, lecture_manager.py, poller_control.py   repris d'agent-scrum-master (données : AGENT_DATA_DIR)
+manager/ihm_questions.py, ihm_connaissances.py  onglets « Assistant des agents » et « Connaissances partagées »
+webhook_server.py, mcp_lecture.py  webhook Bitbucket / poller et lecteur MCP en lecture (repris d'agent-scrum-master)
 manager/initiatives.py   point du matin, sans Streamlit ni modèle (lot 6 bis)
 manager/ihm_tableau.py   onglet Tableau de bord
 manager/ihm_assistant.py onglet Assistant

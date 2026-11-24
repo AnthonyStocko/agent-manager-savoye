@@ -25,9 +25,18 @@ from urllib.parse import urlencode
 ONGLETS = {
     "scrum-master": ("integration", "lancement", "cucumber", "cucumber-avance", "revue", "assistant",
                      "connaissances"),
+    "integration": (),
+    "lancement": (),
+    "cucumber": ("cucumber", "cucumber-avance"),
+    "revue-pr": (),
+    "projets": (),
     "odatio": ("assistant",),
     "dev-tool": ("developper",),
 }
+# Onglets d'agent-scrum-master partis dans un agent spécialisé (découpage) : agent et onglet cibles ; le lien va
+# directement à l'agent s'il est au registre (sinon à agent-scrum-master, qui renvoie vers lui)
+REDIRECTIONS = {"integration": ("integration", ""), "lancement": ("lancement", ""), "cucumber": ("cucumber", "cucumber"),
+                "cucumber-avance": ("cucumber", "cucumber-avance"), "revue": ("revue-pr", "")}
 PARAMETRES = ("page", "ticket", "projet", "conversation", "question", "demande", "depot", "contexte")
 TEXTE_MAX = 1500
 CONTEXTE_MAX = 600
@@ -59,7 +68,26 @@ def parametres(agent: str, page: str = "", ticket: str = "", projet: str = "", c
     return {"source": "manager", **retenus} if retenus else {}
 
 
-def construire(agent: str, url: str, **valeurs) -> str:
+def urls_du_registre() -> dict:
+    """Adresses des agents du registre ({} s'il est illisible)."""
+    from manager import registre
+    try:
+        return {a.nom: a.url for a in registre.charger().agents}
+    except Exception:  # noqa: BLE001 — sans registre lisible, pas de redirection
+        return {}
+
+
+def rediriger(agent: str, url: str, page: str, urls: dict = None) -> tuple:
+    """(agent, adresse, onglet) cibles : onglet d'agent-scrum-master parti dans un agent du registre, sinon inchangés."""
+    if agent != "scrum-master" or page not in REDIRECTIONS:
+        return agent, url, page
+    cible, onglet = REDIRECTIONS[page]
+    urls = urls_du_registre() if urls is None else urls
+    return (cible, urls[cible], onglet) if cible in urls else (agent, url, page)
+
+
+def construire(agent: str, url: str, urls: dict = None, **valeurs) -> str:
     """Adresse de l'agent complétée des paramètres préremplis (l'adresse seule s'il n'y a rien à transmettre)."""
+    agent, url, valeurs["page"] = rediriger(agent, url, valeurs.get("page", ""), urls)
     params = parametres(agent, **valeurs)
     return f"{url.rstrip('/')}/?{urlencode(params)}" if params else url
