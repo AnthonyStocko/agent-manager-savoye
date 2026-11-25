@@ -48,6 +48,29 @@ class TestCommun(AvecDossier):
         with self.assertRaises(conf.ConfigurationErreur):
             conf.enregistrer(conf.Commun(applications=[conf.Application(nom="A B")]), self.dossier)
 
+    def test_relances(self):
+        self.assertEqual(conf.Commun().seuils(), conf.RELANCES)
+        commun = conf.lire({"relances": {"analyse_a_valider_jours": 5, "build_en_echec": False,
+                                         "ignorer_jours": 7}})                     # 7 : valeur par défaut
+        self.assertEqual(commun.relances, {"analyse_a_valider_jours": 5, "build_en_echec": False})
+        self.assertEqual(commun.seuils()["redirection_sans_suite_jours"], 2)
+        conf.enregistrer(commun, self.dossier)
+        self.assertEqual(conf.charger(self.dossier).relances, commun.relances)
+        commun.relances = {}
+        conf.enregistrer(commun, self.dossier)
+        self.assertNotIn("[relances]", (self.dossier / conf.FICHIER).read_text(encoding="utf-8"))
+
+    def test_relances_refusees(self):
+        cas = {"seuil inconnu": {"inconnu": 1}, "true ou false": {"patch_non_joint": 1},
+               "positif ou nul": {"analyse_a_valider_jours": -1}, "entier": {"generation_bloquee_heures": True},
+               "supérieur ou égal à 1": {"ignorer_jours": 0}}
+        for attendu, relances in cas.items():
+            with self.subTest(attendu), self.assertRaises(conf.ConfigurationErreur) as e:
+                conf.lire({"relances": relances})
+            self.assertIn(attendu, str(e.exception))
+        with self.assertRaises(conf.ConfigurationErreur):
+            conf.lire({"relances": 3})
+
     def test_noms_des_secrets_d_application(self):
         self.assertEqual(conf.secrets_application("canson-prod"),
                          {"base": "DB_PASSWORD_CANSON_PROD", "application": "APP_PASSWORD_CANSON_PROD",

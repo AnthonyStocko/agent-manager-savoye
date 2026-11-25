@@ -63,7 +63,7 @@ main.py                  CLI --step ask : assistant des agents (repris d'agent-s
 manager/assistant.py, lecture_manager.py, poller_control.py   repris d'agent-scrum-master (données : AGENT_DATA_DIR)
 manager/ihm_questions.py, ihm_connaissances.py  onglets « Assistant des agents » et « Connaissances partagées »
 webhook_server.py, mcp_lecture.py  webhook Bitbucket / poller et lecteur MCP en lecture (repris d'agent-scrum-master)
-manager/initiatives.py   point du matin, sans Streamlit ni modèle (lot 6 bis)
+manager/initiatives.py   point du matin et relances, sans Streamlit ni modèle (lot 6 bis)
 manager/ihm_tableau.py   onglet Tableau de bord
 manager/ihm_assistant.py onglet Assistant
 manager/evals.py         évaluation de la règle de décision sur tests/evals/decisions.toml
@@ -127,6 +127,25 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   redirections par agent, `journal.bilan`), analyses passées « à valider », patchs livrés, builds Cucumber terminés,
   pannes d'agents et erreurs. Sources : le journal et le tableau déjà construit, sans nouvel appel aux agents. Ni
   notification, ni e-mail, ni phrase générée par le modèle, ni tickets Jira modifiés (décision du 20 novembre 2026).
+- **Relances** (lot 6 bis, `initiatives.relances`, 0 token) : règles évaluées à chaque affichage, hors du cache du
+  tableau, et affichées dans le bloc Alertes de la plus urgente à la moins urgente (5 visibles, le reste dans un
+  dépliant), avec un lien prérempli vers scrum-master et un bouton « Ignorer ». Seuils : `configuration.RELANCES`,
+  remplacés par `[relances]` de `commun.toml` (onglet Configuration › Relances ; seules les valeurs différentes des
+  défauts sont écrites ; lu par le manager seul). Délais en jours ouvrés (lundi à vendredi, sans jours fériés),
+  0 désactive une règle à délai :
+
+  | Règle (clé) | Défaut | Source |
+  |---|---|---|
+  | `patch_non_joint` | immédiat | outil `patchs` |
+  | `build_en_echec` (FAILURE, UNSTABLE) | jusqu'à un build réussi | `builds_jenkins` (dernier build terminé du job) |
+  | `generation_bloquee_heures` | 6 h | outil `cucumber` |
+  | `patch_non_verifie_jours` | 1 j ouvré | outil `patchs` |
+  | `redirection_sans_suite_jours` | 2 j ouvrés | journal (redirection vers scrum-master, 30 j) et `etat_tickets` |
+  | `analyse_a_valider_jours` | 3 j ouvrés | outil `analyses` (date de modification) |
+
+  « Ignorer » masque `ignorer_jours` jours (7 par défaut, table `relances_ignorees`, purgée à échéance). La clé
+  combine la règle, l'objet et son état (ex. `analyse:ODA-1:<date de modification>`) : si l'objet change, la relance
+  revient. Aucune action automatique ni message hors du manager.
 - Canal de commande : HTTP sur 127.0.0.1:8499, en-tête `X-Jeton` obligatoire ; port et jeton dans
   `.tmp/superviseur.json`, recréé à chaque lancement et supprimé à l'arrêt.
 - Le superviseur lance la commande de l'agent dans son dossier avec son propre venv. Il ne modifie jamais le
@@ -207,13 +226,8 @@ Lots : 0 cible dans dev-tool (fait) · 1 structure, registre, superviseur, ongle
 commune et migration (fait) · 3 lecture du commun par odatio et scrum-master (fait) · 4 serveurs MCP, routeur, règle
 de décision (fait) ·
 5 liens de redirection préremplis (fait) · 6 journal, index par ticket, tableau de bord (fait) · 6 bis-a point du
-matin (fait) · 6 bis-b relances (à faire, design validé le 20 novembre 2026) : règles évaluées à chaque
-rafraîchissement, affichées dans Alertes avec un lien prérempli et « Ignorer » (table `relances_ignorees`, N jours,
-clé règle + objet + état : la relance revient si l'objet change). Seuils dans `[relances]` de `commun.toml`
-(onglet Configuration), jours ouvrés du lundi au vendredi : analyse à valider non publiée 3 j ouvrés, redirection
-vers scrum-master sans suite 2 j ouvrés, patch NON joint (immédiat), patch non vérifié 1 j, dernier build Cucumber
-en échec (jusqu'à un succès), génération Cucumber 6 h. Les deux alertes existantes (patch NON joint, génération)
-deviennent des relances.
+matin (fait) · 6 bis-b relances (fait ; les alertes « patch NON joint » et « génération bloquée » du lot 6 sont
+devenues des relances).
 
 ## 7. Questions ouvertes
 

@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
+from manager import initiatives
 from manager import journal as jr
 from manager import registre as reg
 from manager import sources
@@ -191,11 +192,21 @@ class TestTableau(unittest.TestCase):
         self.assertEqual(t.patchs.resume, {"jointe": 1, "non_jointe": 1, "non_verifiee": 1})
         self.assertIn("ticket=ODA-4", t.patchs.lignes[1]["lien"])
         alertes = " | ".join(a["texte"] for a in t.alertes.lignes)
-        self.assertIn("ODA-4 : patch livré le 2026-11-18 11:05 NON joint dans Jira (ODA-4-specifique.patch)", alertes)
-        self.assertNotIn("ODA-5", alertes)                                  # non vérifié : dans le bloc seulement
         self.assertIn("Odatio : en échec", alertes)
-        self.assertIn("client-x en cours depuis plus de", alertes)       # génération bloquée (8 h)
+        self.assertNotIn("ODA-4", alertes)                 # patch NON joint, génération bloquée : relances
+        self.assertNotIn("client-x", alertes)
         self.assertEqual(self.journal.ticket("ODA-1")["analyse"]["a_valider"], True)   # index alimenté
+
+    def test_relances_sur_le_tableau_construit(self):
+        """Relances calculées sur la sortie de construire (formats réels des outils), vendredi 2026-11-20 9 h."""
+        relances = initiatives.relances(self.journal, self.construire(), maintenant=MAINTENANT)
+        self.assertEqual([r.cle for r in relances], [            # du plus urgent au moins urgent
+            "patch_non_joint:ODA-4:2026-11-18T11:05",
+            "generation:client-x:2026-11-20T01:00:00",           # 8 h > 6 h ; build #11 réussi : pas de relance
+            "patch_non_verifie:ODA-5:2026-11-17T09:00",          # 1 j ouvré
+            "analyse:ODA-3:2026-11-17T08:00"])                   # 3 j ouvrés : échue vendredi 8 h ; ODA-1 non
+        self.assertIn("page=cucumber", relances[1].lien)
+        self.assertIn("ticket=ODA-3", relances[3].lien)
 
     def test_builds_lus_et_affiches(self):
         appels = []

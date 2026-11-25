@@ -20,15 +20,54 @@ def afficher() -> None:
     except conf.ConfigurationErreur as e:
         st.error(f"{e}\n\nCorrige `{conf.DOSSIER / conf.FICHIER}` à la main.")
         return
-    acces, applications, importer, registre = st.tabs(["Accès", "Applications", "Import", "Registre des agents"])
+    acces, applications, relances, importer, registre = st.tabs(["Accès", "Applications", "Relances", "Import",
+                                                                 "Registre des agents"])
     with acces:
         _acces(commun)
     with applications:
         _applications(commun)
+    with relances:
+        _relances(commun)
     with importer:
         _import()
     with registre:
         _registre()
+
+
+SEUILS = {   # libellé et aide de chaque seuil de conf.RELANCES
+    "analyse_a_valider_jours": ("Analyse à valider non publiée (jours ouvrés)", "0 : règle désactivée."),
+    "redirection_sans_suite_jours": ("Ticket redirigé vers Scrum Master sans suite (jours ouvrés)",
+                                     "Analyse non modifiée depuis la redirection. 0 : règle désactivée."),
+    "patch_non_verifie_jours": ("Pièce jointe d'un patch non vérifiée (jours ouvrés)", "0 : règle désactivée."),
+    "generation_bloquee_heures": ("Génération Cucumber en cours (heures)", "0 : règle désactivée."),
+    "patch_non_joint": ("Patch livré NON joint dans Jira", "Relance immédiate."),
+    "build_en_echec": ("Dernier build Cucumber d'un job en échec", "Jusqu'à un build réussi."),
+    "ignorer_jours": ("« Ignorer » masque une relance pendant (jours)", "Elle revient plus tôt si la situation "
+                                                                        "change."),
+}
+
+
+def _relances(commun: conf.Commun) -> None:
+    st.caption("Relances du tableau de bord (bloc Alertes) : rien n'est envoyé ni lancé, elles montrent seulement où "
+               "agir. Jours ouvrés : du lundi au vendredi. Lues par le manager seul : aucun agent à redémarrer.")
+    seuils = commun.seuils()
+    with st.form("relances"):
+        valeurs = {}
+        for cle, (libelle, aide) in SEUILS.items():
+            if isinstance(conf.RELANCES[cle], bool):
+                valeurs[cle] = st.toggle(libelle, value=seuils[cle], key=f"relance-{cle}", help=aide)
+            else:
+                valeurs[cle] = int(st.number_input(libelle, min_value=1 if cle == "ignorer_jours" else 0,
+                                                   max_value=90, step=1, value=int(seuils[cle]),
+                                                   key=f"relance-{cle}", help=aide))
+        if st.form_submit_button("Enregistrer", type="primary"):
+            commun.relances = {k: v for k, v in valeurs.items() if v != conf.RELANCES[k]}
+            try:
+                conf.enregistrer(commun)
+            except conf.ConfigurationErreur as e:
+                st.error(str(e))
+                return
+            st.success("Seuils enregistrés : ils s'appliquent au prochain rafraîchissement du tableau de bord.")
 
 
 def _lignes(texte: str) -> list:

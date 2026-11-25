@@ -63,9 +63,12 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
   7 jours) : questions au manager et leur coût, redirections, analyses passées « à valider », patchs livrés, builds
   Cucumber terminés, pannes d'agents et erreurs, avec un lien vers le ticket. « Vu » le masque jusqu'au lendemain ;
   il ne s'affiche pas s'il n'y a rien de nouveau ;
-
-- **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable, génération Cucumber en
-  cours depuis plus de 6 h, patch livré mais NON joint dans Jira ;
+- **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable ; puis les **relances**
+  (🔔), de la plus urgente à la moins urgente : patch livré NON joint dans Jira, dernier build Cucumber en échec,
+  génération Cucumber en cours depuis plus de 6 h, pièce jointe d'un patch non vérifiée depuis 1 jour ouvré, ticket
+  redirigé vers Scrum Master sans suite depuis 2 jours ouvrés, analyse à valider non publiée depuis 3 jours ouvrés.
+  Chacune a un lien vers Scrum Master et un bouton « Ignorer » (masquée 7 jours, ou jusqu'à ce que la situation
+  change). Seuils réglables dans Configuration › Relances ;
 - **Agents** : état résumé (le détail reste dans l'onglet Agents) ;
 - **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses de Scrum
   Master), avec l'état de leur analyse et un bouton qui ouvre Scrum Master sur le ticket ;

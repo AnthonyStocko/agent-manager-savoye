@@ -179,6 +179,20 @@ class TestJournal(unittest.TestCase):
         with closing(sqlite3.connect(self.fichier)) as c:
             self.assertEqual(c.execute("SELECT COUNT(*) FROM points").fetchone()[0], 1)     # une seule ligne
 
+    def test_relances_ignorees(self):
+        self.assertEqual(self.journal.relances_ignorees(), set())
+        self.assertTrue(self.journal.ignorer_relance("analyse:ODA-1:2026-11-17T08:00", 7))
+        self.assertTrue(self.journal.ignorer_relance("build:CUCUMBER-RUN:11", 7))
+        self.assertFalse(self.journal.ignorer_relance("", 7))
+        self.assertFalse(self.journal.ignorer_relance("x", 0))
+        with closing(sqlite3.connect(self.fichier)) as c:                   # échéance passée
+            c.execute("UPDATE relances_ignorees SET jusqu_au = '2000-01-01T00:00:00' WHERE cle LIKE 'build:%'")
+            c.commit()
+        self.assertEqual(self.journal.relances_ignorees(), {"analyse:ODA-1:2026-11-17T08:00"})
+        self.journal.purger()
+        with closing(sqlite3.connect(self.fichier)) as c:
+            self.assertEqual(c.execute("SELECT COUNT(*) FROM relances_ignorees").fetchone()[0], 1)
+
     def test_bilan(self):
         depuis = jr.maintenant()
         self.journal.noter_question("ODA-1 ?", decision="rediriger", cout_usd=0.5,
