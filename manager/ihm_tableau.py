@@ -152,6 +152,35 @@ def _jenkins(bloc: tableau.Bloc) -> None:
                        "Durée (min)": b["duree_min"]} for b in builds], hide_index=True, width="stretch")
 
 
+ICONES_BOUCLE = {"en cours": "🟡", "terminée": "🟢", "abandonnée": "🟠"}
+
+
+def _boucles(bloc: tableau.Bloc) -> None:
+    """Boucles de correction autonome d'agent-cucumber : information seulement, rien n'est à valider ici."""
+    if not _entete(bloc):
+        if not bloc.erreur and not bloc.note:
+            st.caption("Aucune boucle de correction.")
+        return
+    st.caption("agent-dev-tool-savoye corrige l'agent Cucumber et fusionne sur main sans validation (tests et "
+               "contrôle anti-triche) : affiché pour information.")
+    for b in bloc.lignes[:5]:
+        gauche, droite = st.columns([5, 1])
+        restants = ", ".join(f"{c} {n}" for c, n in b["categories"].items() if n) or "aucun échec"
+        texte = (f"{ICONES_BOUCLE.get(b['etat'], '⚪')} **{b['client']}** · {b['etat']}, itération "
+                 f"{b['iteration']}/{b['iterations_max']} · échecs {b['echecs_avant']} → {b['echecs_apres']} "
+                 f"({restants}) · {_dollars(b['cout_usd'])}")
+        if b["raison"]:
+            texte += f"  \n:gray[{b['raison']}]"
+        for c in b["corrections"]:
+            texte += f"  \n🛠 correction {c}"
+        for a in b["annulations"]:
+            texte += f"  \n↩️ retour arrière {a}"
+        gauche.markdown(texte)
+        if b.get("lien"):
+            droite.link_button("Relancer", b["lien"], help="Demande préremplie vers dev-tool (échecs dus à l'agent) "
+                                                            "ou agent Cucumber (défauts de l'application)")
+
+
 STATUTS_PATCH = {"jointe": "🟢 en pièce jointe Jira", "non_jointe": "🟠 NON joint dans Jira",
                  "non_verifiee": "⚪ pièce jointe non vérifiée"}
 
@@ -225,6 +254,8 @@ def afficher() -> None:
     with droite:
         with st.container(border=True):
             _jenkins(t.jenkins)
+        with st.container(border=True):
+            _boucles(t.boucles)
         with st.container(border=True):
             _couts(t.couts)
         with st.container(border=True):

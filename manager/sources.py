@@ -15,6 +15,11 @@ Formats lus (contrat avec scrum-master ; un format inattendu donne une liste vid
 - outil ``patchs`` (registre local des livraisons, agent-scrum-master#49) : une ligne par livraison
   ``- <CLE> (livré le AAAA-MM-JJ HH:MM) : <fichier.patch>[, …] — <état>``, état ``en pièce jointe Jira``,
   ``NON joint dans Jira : <fichiers>`` ou ``pièce jointe non vérifiée (<raison>)`` ;
+- outil ``boucles_cucumber`` (boucles de correction autonome d'agent-cucumber, lecture_manager.boucles) : par boucle
+  ``- <génération> [<client>] : <état> · itération <i>/<N> · échecs <a> → <b> · AGENT <n>, APPLICATION <n>,
+  ENVIRONNEMENT <n>, INCERTAIN <n> · coût <x> $ · relance <oui|non> · mis à jour <ISO>``, puis lignes indentées
+  ``raison : …``, ``correction it<i> <commit> : <cause>``, ``retour arrière it<i> <commit> → <revert>``,
+  ``demande : <texte>`` ;
 - fichier ``<dossier scrum-master>/.tmp/token_usage.csv`` (main.py, TOKEN_USAGE_FIELDS) : séparateur « ; »,
   en-tête, colonnes lues ``date`` (ISO), ``ticket``, ``etape``, ``cout_usd`` (point ou virgule décimale).
 """
@@ -34,7 +39,7 @@ from manager import registre as reg
 
 DELAI_MCP_S = 30.0
 LISTE_BLANCHE = {
-    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs"),
+    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs", "boucles_cucumber"),
     "odatio": ("projets",),
 }
 TOKEN_USAGE = Path(".tmp") / "token_usage.csv"
@@ -232,3 +237,40 @@ def cout_ticket_agent(registre: reg.Registre, cle: str, agent: str = "scrum-mast
 
 def depuis_jours(jours: int) -> str:
     return (datetime.now() - timedelta(days=jours)).isoformat(timespec="seconds")
+
+
+_BOUCLE = re.compile(r"^- (?P<generation>\S+) \[(?P<client>[^\]]*)\] : (?P<etat>[^·]+?) · itération (?P<i>\d+)/(?P<n>\d+)"
+                     r" · échecs (?P<avant>\S+) → (?P<apres>\S+) · (?P<categories>[^·]+?) · coût (?P<cout>[\d.]+) \$"
+                     r" · relance (?P<relance>oui|non) · mis à jour (?P<maj>\S*)\s*$")
+
+
+def lire_boucles(texte: str) -> list[dict]:
+    """[{generation, client, etat, iteration, iterations_max, echecs_avant, echecs_apres, categories, cout_usd,
+    relance, mis_a_jour, raison, corrections, annulations, demande}] depuis l'outil ``boucles_cucumber``."""
+    boucles = []
+    for ligne in (texte or "").splitlines():
+        m = _BOUCLE.match(ligne.strip())
+        if m:
+            categories = {}
+            for morceau in m["categories"].split(","):
+                nom, _, n = morceau.strip().rpartition(" ")
+                if nom and n.isdigit():
+                    categories[nom] = int(n)
+            boucles.append({"generation": m["generation"], "client": m["client"], "etat": m["etat"].strip(),
+                            "iteration": int(m["i"]), "iterations_max": int(m["n"]), "echecs_avant": m["avant"],
+                            "echecs_apres": m["apres"], "categories": categories, "cout_usd": float(m["cout"]),
+                            "relance": m["relance"] == "oui", "mis_a_jour": m["maj"], "raison": "",
+                            "corrections": [], "annulations": [], "demande": ""})
+            continue
+        if not boucles or not ligne.startswith("  "):
+            continue
+        detail, b = ligne.strip(), boucles[-1]
+        if detail.startswith("raison : "):
+            b["raison"] = detail[len("raison : "):]
+        elif detail.startswith("correction "):
+            b["corrections"].append(detail[len("correction "):])
+        elif detail.startswith("retour arrière "):
+            b["annulations"].append(detail[len("retour arrière "):])
+        elif detail.startswith("demande : "):
+            b["demande"] = detail[len("demande : "):].replace(" / ", "\n")
+    return boucles

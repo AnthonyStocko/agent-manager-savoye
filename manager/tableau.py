@@ -49,13 +49,22 @@ class Tableau:
     couts: Bloc
     alertes: Bloc
     genere_le: str = ""
+    boucles: Bloc = field(default_factory=lambda: Bloc("Boucles de correction Cucumber"))
 
     def blocs(self) -> list[Bloc]:
-        return [self.alertes, self.agents, self.tickets, self.analyses, self.jenkins, self.patchs, self.couts]
+        return [self.alertes, self.agents, self.tickets, self.analyses, self.jenkins, self.boucles, self.patchs,
+                self.couts]
 
 
 def _lien(agent: reg.Agent | None, ticket: str = "", page: str = "lancement") -> str:
     return liens.construire(agent.nom, agent.url, page=page, ticket=ticket) if agent else ""
+
+
+def _agent(registre: reg.Registre, nom: str) -> reg.Agent | None:
+    try:
+        return registre.agent(nom)
+    except reg.RegistreErreur:
+        return None
 
 
 def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=sources.appeler_mcp,
@@ -88,15 +97,16 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
                        dict.fromkeys(e.get("etat") for e in etats)}
 
     # --- scrum-master : analyses, cucumber, builds, patchs (un seul lancement du serveur MCP) -------------------
-    textes, erreur_scrum, erreur_patchs = {}, "", ""
+    textes, erreur_scrum, erreur_patchs, erreur_boucles = {}, "", "", ""
     if scrum is None:
         erreur_scrum = "scrum-master absent du registre"
     else:
         try:
             r = appeler_mcp(scrum, [("analyses", {}), ("cucumber", {}), ("builds_jenkins", {"nombre": BUILDS}),
-                                    ("patchs", {"jours": PATCHS_JOURS})])
+                                    ("patchs", {"jours": PATCHS_JOURS}), ("boucles_cucumber", {})])
             textes, erreurs = r.textes, dict(r.erreurs)
             erreur_patchs = erreurs.pop("patchs", "")          # rapportée dans son bloc, sans alerte
+            erreur_boucles = erreurs.pop("boucles_cucumber", "")
             if erreurs:
                 erreur_scrum = " ; ".join(f"{o} : {m}" for o, m in erreurs.items())
         except sources.SourceErreur as e:
@@ -149,6 +159,20 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
             t.jenkins.note = "Builds Jenkins indisponibles."
     else:
         t.jenkins.erreur = erreur_scrum or "Cucumber indisponible"
+
+    # --- boucles de correction autonome d'agent-cucumber (information, aucune validation) ----------------------
+    if "boucles_cucumber" in textes:
+        cucumber_agent, devtool = _agent(registre, "cucumber"), _agent(registre, "dev-tool")
+        for b in sources.lire_boucles(textes["boucles_cucumber"]):
+            lien = ""
+            if b["relance"] and b["demande"] and devtool:
+                lien = liens.construire(devtool.nom, devtool.url, page="developper", depot="agent-cucumber",
+                                        demande=b["demande"], contexte=f"Boucle {b['generation']} : {b['raison']}")
+            elif b["relance"] and cucumber_agent:
+                lien = liens.construire(cucumber_agent.nom, cucumber_agent.url, page="cucumber", projet=b["client"])
+            t.boucles.lignes.append({**b, "lien": lien})
+    else:
+        t.boucles.note = "Boucles de correction indisponibles" + (f" : {erreur_boucles}" if erreur_boucles else ".")
 
     # --- patchs livrés (registre des livraisons de scrum-master) -------------------------------------------------
     if "patchs" in textes:

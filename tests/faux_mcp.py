@@ -39,6 +39,16 @@ def patchs(jours: int = 7) -> str:
             "- ODA-2 (livré le 2026-11-19 16:00) : ODA-2-standard.patch — en pièce jointe Jira")
 
 
+@serveur.tool(description="boucles de correction Cucumber")
+def boucles_cucumber(nombre: int = 5) -> str:
+    return ("Boucles de correction Cucumber :\n"
+            "- client-x-4-20261120-080000 [client-x] : abandonnée · itération 3/3 · échecs 5 → 2 · AGENT 1, "
+            "APPLICATION 1, ENVIRONNEMENT 0, INCERTAIN 0 · coût 3.40 $ · relance oui · mis à jour 2026-11-20T08:50:00\n"
+            "  raison : limite de 3 itération(s) atteinte\n"
+            "  correction it1 abc1234567 : prompt de lot trop vague sur les steps existants\n"
+            "  demande : Boucle de correction client-x-4 : corriger l'agent cucumber / - [AGENT] Créer — Then x : m")
+
+
 @serveur.tool(description="question coûteuse : ne doit jamais être appelée par le tableau de bord")
 def question(texte: str = "") -> str:
     return "interdit"

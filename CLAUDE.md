@@ -155,6 +155,7 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   |---|---|---|
   | `patch_non_joint` | immédiat | outil `patchs` |
   | `build_en_echec` (FAILURE, UNSTABLE) | jusqu'à un build réussi | `builds_jenkins` (dernier build terminé du job) |
+  | `boucle_echecs` | immédiat | `boucles_cucumber` (boucle arrêtée avec des échecs AGENT non résolus ou APPLICATION) |
   | `generation_bloquee_heures` | 6 h | outil `cucumber` |
   | `patch_non_verifie_jours` | 1 j ouvré | outil `patchs` |
   | `redirection_sans_suite_jours` | 2 j ouvrés | journal (redirection vers scrum-master, 30 j) et `etat_tickets` |
@@ -163,6 +164,14 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   « Ignorer » masque `ignorer_jours` jours (7 par défaut, table `relances_ignorees`, purgée à échéance). La clé
   combine la règle, l'objet et son état (ex. `analyse:ODA-1:<date de modification>`) : si l'objet change, la relance
   revient. Aucune action automatique ni message hors du manager.
+- **Boucles de correction Cucumber** (25 novembre 2026) : agent-cucumber, à la fin d'un run, envoie ses échecs
+  dus à l'agent à dev-tool, qui corrige l'agent et fusionne sur `main` **sans validation humaine** (contrat :
+  `agent-cucumber/CLAUDE.md` § 6). Le manager n'y prend aucune part active : il **affiche** l'état (outil
+  `boucles_cucumber` de `mcp_lecture.py`, qui lit `.tmp/cucumber/<client>/boucles/*.json` ; bloc « Boucles de
+  correction Cucumber » : en cours, itération x/N, terminée, abandonnée, corrections et retours arrière, coût) et
+  lève la relance `boucle_echecs` seulement si la boucle s'arrête avec des échecs AGENT non résolus (lien vers
+  dev-tool, demande préremplie) ou APPLICATION (lien vers l'agent Cucumber). Le démarrage de dev-tool par
+  agent-cucumber passe par le canal de commande ci-dessous (`POST /agents/dev-tool/demarrer`).
 - Canal de commande : HTTP sur 127.0.0.1:8499, en-tête `X-Jeton` obligatoire ; port et jeton dans
   `.tmp/superviseur.json`, recréé à chaque lancement et supprimé à l'arrêt.
 - Le superviseur lance la commande de l'agent dans son dossier avec son propre venv. Il ne modifie jamais le
@@ -179,7 +188,7 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
     affiché sous la réponse, n'agit pas), `doc_sommaire`, `doc_lire`, `doc_chercher` (documentation Odatio, si
     configurée ; non simulés par les évals, ils appellent Bitbucket) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
-    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs), odatio `mcp_server.py --manager`
+    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs, boucles_cucumber), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
 - **Liens préremplis** (`manager/liens.py`) : `rediriger` ouvre l'agent au bon endroit avec
   `?source=manager&page=…&ticket=…&projet=…&conversation=…&question=…&demande=…&depot=…&contexte=…` (onglets

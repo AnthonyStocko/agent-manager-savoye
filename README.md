@@ -76,6 +76,11 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
   Master) ;
 - **Jenkins / Cucumber** : verrou du job Cucumber (un seul à la fois, géré par Scrum Master), génération en cours
   par client, derniers builds ;
+- **Boucles de correction Cucumber** : quand des tests générés échouent à cause de l'agent Cucumber, celui-ci
+  demande à l'outillage de développement de le corriger, puis rejoue les tests, sans validation de ta part. Le bloc
+  affiche, pour information, l'état de chaque boucle (en cours, itération x/N, terminée, abandonnée), les corrections
+  fusionnées et les retours arrière. Une relance n'apparaît que si la boucle s'arrête avec des échecs dus à l'agent
+  non résolus (demande préremplie vers l'outillage de développement) ou des défauts de l'application ;
 - **Coûts** : questions au manager sur 7 et 30 jours, et consommation de Scrum Master par étape
   (`.tmp/token_usage.csv` de l'agent) ;
 - **Patchs livrés** : patchs livrés par Scrum Master ces 7 derniers jours, d'après son registre local des livraisons

@@ -123,3 +123,27 @@ def test_aucune_ecriture():
         assert not re.search(r"requests\.(post|put|delete|patch)|trigger_|publish|validate\(|save_draft|"
                              r"record_publication|acquire\(|release\(|write_env|open\([^)]*['\"][wa]|"
                              r"livraisons\.noter", source), fichier
+
+
+def test_boucles_cucumber(tmp_path):
+    """Boucles de correction d'agent-cucumber : texte au format lu par sources.lire_boucles (contrat)."""
+    from manager import sources
+    assert lecture.boucles(str(tmp_path)) == "Aucune boucle de correction Cucumber."
+    dossier = tmp_path / ".tmp" / "cucumber" / "client-x" / "boucles"
+    dossier.mkdir(parents=True)
+    (dossier / "client-x-4-1.json").write_text(json.dumps({
+        "generation": "client-x-4-1", "projet": "client-x", "etat": "abandonnee", "iteration": 2, "iterations_max": 3,
+        "initial": {"echecs": 4}, "final": {"echecs": 1, "par_categorie": {"AGENT": 1, "APPLICATION": 0}},
+        "raison": "aucun échec en moins", "cout_usd": 2.5, "relance": True, "mis_a_jour": "2026-11-20T08:00:00",
+        "corrections": [{"iteration": 1, "commit": "abcdef1234567", "cause": "prompt vague"}],
+        "annulations": [{"iteration": 2, "commit": "abcdef1234567", "revert": "1234567abcdef"}],
+        "demande_texte": "Boucle : corriger l'agent\n- [AGENT] S — Then x : m token=secret-fictif"}),
+        encoding="utf-8")
+    texte = lecture.boucles(str(tmp_path))
+    boucle = sources.lire_boucles(texte)[0]
+    assert (boucle["client"], boucle["etat"], boucle["iteration"], boucle["relance"]) == \
+        ("client-x", "abandonnée", 2, True)
+    assert boucle["echecs_avant"] == "4" and boucle["echecs_apres"] == "1"
+    assert boucle["corrections"] == ["it1 abcdef1234 : prompt vague"]
+    assert boucle["annulations"] == ["it2 abcdef1234 → 1234567abc"]
+    assert boucle["demande"].startswith("Boucle : corriger l'agent\n- [AGENT]")

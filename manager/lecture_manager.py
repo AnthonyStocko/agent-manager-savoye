@@ -169,3 +169,53 @@ def patchs(jours: int = 7, chemin: str = "") -> str:
         lignes.append(f"- {e['ticket']} (livré le {e['date'][:16].replace('T', ' ')}) : {', '.join(e['fichiers'])}"
                       f" — {etat}")
     return _masque(f"Patchs livrés ces {jours} derniers jours (agent Scrum Master) :\n" + "\n".join(lignes))
+
+
+BOUCLES_MAX = 5
+ETATS_BOUCLE = {"en_cours": "en cours", "terminee": "terminée", "abandonnee": "abandonnée"}
+
+
+def boucles(racine: str = WORKSPACE_DIR, nombre: int = BOUCLES_MAX) -> str:
+    """Boucles de correction autonome d'agent-cucumber (.tmp/cucumber/<client>/boucles/<génération>.json), de la
+    plus récente à la plus ancienne. Information seulement : aucune validation n'est attendue.
+
+    Format (contrat avec agent-manager-savoye, sources.lire_boucles), par boucle :
+    ``- <génération> [<client>] : <état> · itération <i>/<N> · échecs <avant> → <après> · AGENT <n>, APPLICATION <n>,
+    ENVIRONNEMENT <n>, INCERTAIN <n> · coût <x.xx> $ · relance <oui|non> · mis à jour <ISO>`` puis, indentées :
+    ``raison : …``, ``correction it<i> <commit> : <cause>``, ``retour arrière it<i> <commit> → <revert>``,
+    ``demande : <demande prête à coller, sur une ligne>``.
+    """
+    import json
+    fichiers = sorted(glob.glob(os.path.join(racine, ".tmp", "cucumber", "*", "boucles", "*.json")),
+                      key=os.path.getmtime, reverse=True)[:max(1, min(int(nombre or BOUCLES_MAX), 20))]
+    if not fichiers:
+        return "Aucune boucle de correction Cucumber."
+    lignes = []
+    for chemin in fichiers:
+        try:
+            with open(chemin, encoding="utf-8") as f:
+                b = json.load(f)
+        except (OSError, ValueError):
+            continue
+        final = b.get("final") or {}
+        categories = final.get("par_categorie") or (b.get("initial") or {}).get("par_categorie") or {}
+        apres = final.get("echecs", "?") if final else "?"
+        lignes.append(
+            f"- {b.get('generation', '?')} [{b.get('projet', '?')}] : {ETATS_BOUCLE.get(b.get('etat'), b.get('etat'))}"
+            f" · itération {b.get('iteration', 0)}/{b.get('iterations_max', 0)}"
+            f" · échecs {(b.get('initial') or {}).get('echecs', '?')} → {apres}"
+            f" · " + ", ".join(f"{c} {categories.get(c, 0)}" for c in ("AGENT", "APPLICATION", "ENVIRONNEMENT",
+                                                                         "INCERTAIN"))
+            + f" · coût {float(b.get('cout_usd') or 0):.2f} $ · relance {'oui' if b.get('relance') else 'non'}"
+            f" · mis à jour {b.get('mis_a_jour', '')}")
+        if b.get("raison"):
+            lignes.append(f"  raison : {' '.join(str(b['raison']).split())}")
+        for c in b.get("corrections") or []:
+            lignes.append(f"  correction it{c.get('iteration')} {str(c.get('commit', ''))[:10]} : "
+                          f"{' '.join(str(c.get('cause', '')).split())[:200]}")
+        for a in b.get("annulations") or []:
+            lignes.append(f"  retour arrière it{a.get('iteration')} {str(a.get('commit', ''))[:10]} → "
+                          f"{str(a.get('revert', ''))[:10]}")
+        if b.get("demande_texte"):
+            lignes.append(f"  demande : {' / '.join(str(b['demande_texte']).splitlines())[:1400]}")
+    return _masque("Boucles de correction Cucumber :\n" + "\n".join(lignes))

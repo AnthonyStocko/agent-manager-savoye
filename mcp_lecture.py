@@ -65,6 +65,12 @@ def creer_serveur() -> MCPServer:
     def patchs(jours: int = 7) -> str:
         return _appel(lecture.patchs, jours)
 
+    @serveur.tool(description="Boucles de correction autonome d'agent-cucumber (agent-dev-tool-savoye corrige l'agent "
+                              "et fusionne sans validation) : état, itération, échecs par catégorie, corrections et "
+                              "retours arrière, coût. Information seulement.")
+    def boucles_cucumber(nombre: int = 5) -> str:
+        return _appel(lecture.boucles, lecture.WORKSPACE_DIR, nombre)
+
     return serveur
 
 
