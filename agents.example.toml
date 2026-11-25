@@ -129,3 +129,19 @@ commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "st
 domaine = """Relecture assistée des pull requests Bitbucket d'une fonctionnalité (lecture seule)."""
 mcp = []
 secrets = ["ANTHROPIC_API_KEY", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"]
+
+[[agents]]
+nom = "retrospective"
+titre = "Rétrospective"
+dossier = "../agent-retrospective"
+port = 8509
+mode = "auto"
+# Venv partagé d'agent-scrum-master pendant le chantier (agent-socle installé en éditable)
+commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "streamlit", "run", "app.py",
+            "--server.port", "{port}", "--server.address", "127.0.0.1", "--server.headless", "true"]
+domaine = """Rétrospective d'un ticket fusionné : compare le patch et le cadrage d'agent-lancement aux commits du
+développeur, explique les écarts et propose des améliorations d'agent-lancement, transmises à dev-tool après
+validation (lecture seule sur Jira et Bitbucket). Ses rapports se consultent avec l'outil retrospectives de
+Scrum Master ; lancer une rétrospective ou valider une proposition se fait dans son IHM."""
+mcp = []
+secrets = ["ANTHROPIC_API_KEY", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"]

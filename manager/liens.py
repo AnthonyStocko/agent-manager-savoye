@@ -29,6 +29,7 @@ ONGLETS = {
     "lancement": (),
     "cucumber": ("cucumber", "cucumber-avance"),
     "revue-pr": (),
+    "retrospective": (),
     "projets": (),
     "odatio": ("assistant",),
     "dev-tool": ("developper",),

@@ -10,6 +10,7 @@ leur état dans une seule IHM, tient la configuration commune (accès, applicati
 | Scrum Master (`agent-scrum-master`) | 8501 | avec le manager |
 | Agent fonctionnel Odatio (`agent-odatio`) | 8502 | avec le manager |
 | Outillage de développement (`agent-dev-tool-savoye`) | 8503 | à la demande, depuis l'onglet Agents |
+| Rétrospective (`agent-retrospective`) | 8509 | avec le manager |
 
 ## Installation (Windows)
 
@@ -66,8 +67,9 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
 - **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable ; puis les **relances**
   (🔔), de la plus urgente à la moins urgente : patch livré NON joint dans Jira, dernier build Cucumber en échec,
   génération Cucumber en cours depuis plus de 6 h, pièce jointe d'un patch non vérifiée depuis 1 jour ouvré, ticket
-  redirigé vers Scrum Master sans suite depuis 2 jours ouvrés, analyse à valider non publiée depuis 3 jours ouvrés.
-  Chacune a un lien vers Scrum Master et un bouton « Ignorer » (masquée 7 jours, ou jusqu'à ce que la situation
+  redirigé vers Scrum Master sans suite depuis 2 jours ouvrés, analyse à valider non publiée depuis 3 jours ouvrés,
+  proposition d'amélioration de la Rétrospective en attente depuis 3 jours ouvrés.
+  Chacune a un lien vers l'agent concerné et un bouton « Ignorer » (masquée 7 jours, ou jusqu'à ce que la situation
   change). Seuils réglables dans Configuration › Relances ;
 - **Agents** : état résumé (le détail reste dans l'onglet Agents) ;
 - **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses de Scrum
@@ -87,6 +89,9 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
   (outil `patchs`), avec l'état de la pièce jointe Jira (jointe, NON jointe, non vérifiée) et un bouton qui ouvre
   Scrum Master sur le ticket. Un Scrum Master antérieur à ce registre affiche seulement une invitation à le mettre à
   jour.
+- **Rétrospectives** : derniers tickets analysés par l'agent Rétrospective (patch d'agent-lancement comparé au code
+  fusionné) avec leur score, et propositions d'amélioration d'agent-lancement en attente ; les boutons ouvrent
+  l'agent Rétrospective, où se font la validation et l'envoi à l'outillage de développement.
 
 Une source indisponible (superviseur, agent arrêté, serveur MCP en erreur) affiche un message court ; le reste
 s'affiche.

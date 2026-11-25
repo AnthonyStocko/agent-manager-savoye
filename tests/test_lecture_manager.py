@@ -147,3 +147,56 @@ def test_boucles_cucumber(tmp_path):
     assert boucle["corrections"] == ["it1 abcdef1234 : prompt vague"]
     assert boucle["annulations"] == ["it2 abcdef1234 → 1234567abc"]
     assert boucle["demande"].startswith("Boucle : corriger l'agent\n- [AGENT]")
+
+
+def _retro(dossier, ticket, date, score, ajuste=None, ecarts=2, analyse=True):
+    rapport = {"ticket": ticket, "date": date, "score": score, "score_ajuste": ajuste,
+               "analyse": {"ecarts": [{}] * ecarts} if analyse else None}
+    (dossier / f"{ticket}.json").write_text(json.dumps(rapport), encoding="utf-8")
+
+
+def test_retrospectives(tmp_path):
+    """Rétrospectives d'agent-retrospective : texte au format lu par sources.lire_retrospectives (contrat)."""
+    from manager import sources
+    vide = lecture.retrospectives(str(tmp_path))
+    assert vide == "Rétrospectives :\n- aucune\nPropositions en attente :\n- aucune"
+    assert sources.lire_retrospectives(vide) == ([], [])
+    dossier = tmp_path / ".tmp" / "retrospectives"
+    dossier.mkdir(parents=True)
+    _retro(dossier, "ODA-1", "2026-11-18T10:00:00", 62, 70)
+    _retro(dossier, "ODA-2", "2026-11-19T11:30:00", 40, analyse=False)
+    (dossier / "motifs.json").write_text("{}", encoding="utf-8")              # pas un rapport
+    (dossier / "ODA-3.json").write_text("illisible", encoding="utf-8")
+    (dossier / "propositions.json").write_text(json.dumps({"propositions": {
+        "m-1": {"id": "m-1", "levier": "patch", "libelle": "Lire les tests · voisins", "tickets": ["ODA-1", "ODA-2"],
+                "etat": "proposee", "cree_le": "2026-11-18T10:00:00", "reportee_le": ""},
+        "m-2": {"id": "m-2", "levier": "cadrage", "libelle": "Rejetée", "tickets": ["ODA-1"], "etat": "rejetee",
+                "cree_le": "2026-11-18T10:00:00"},
+        "m-3": {"id": "m-3", "levier": "conventions", "libelle": "Reportée", "tickets": ["ODA-1", "ODA-2"],
+                "etat": "proposee", "cree_le": "2026-11-10T10:00:00", "reportee_le": "2026-11-19T09:00:00"}}}),
+        encoding="utf-8")
+    texte = lecture.retrospectives(str(tmp_path))
+    retros, props = sources.lire_retrospectives(texte)
+    assert retros == [
+        {"cle": "ODA-2", "date": "2026-11-19 11:30", "score": 40, "score_ajuste": None, "ecarts": 0, "analyse": False},
+        {"cle": "ODA-1", "date": "2026-11-18 10:00", "score": 62, "score_ajuste": 70, "ecarts": 2, "analyse": True}]
+    assert props == [
+        {"id": "m-1", "levier": "patch", "libelle": "Lire les tests, voisins", "tickets": 2,
+         "depuis": "2026-11-18 10:00"},
+        {"id": "m-3", "levier": "conventions", "libelle": "Reportée", "tickets": 2, "depuis": "2026-11-19 09:00"}]
+    assert len(sources.lire_retrospectives(lecture.retrospectives(str(tmp_path), 1))[0]) == 1
+    with pytest.raises(lecture.LectureErreur):
+        lecture.retrospectives(str(tmp_path), "beaucoup")
+
+
+def test_retrospectives_outil_mcp(monkeypatch, tmp_path):
+    pytest.importorskip("mcp.server.mcpserver")
+    monkeypatch.chdir(os.getcwd())
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+    import mcp_lecture
+    monkeypatch.setattr(lecture, "WORKSPACE_DIR", str(tmp_path))
+    serveur = mcp_lecture.creer_serveur()
+    outils = {o.name: o for o in asyncio.run(serveur.list_tools())}
+    assert "retrospectives" in outils and "nombre" in json.dumps(outils["retrospectives"].input_schema)
+    resultat = asyncio.run(serveur.call_tool("retrospectives", {"nombre": 3}))
+    assert "Propositions en attente" in json.dumps(resultat, default=str, ensure_ascii=False)

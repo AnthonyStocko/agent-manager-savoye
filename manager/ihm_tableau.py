@@ -203,6 +203,32 @@ def _patchs(bloc: tableau.Bloc) -> None:
             droite.link_button("Ouvrir", p["lien"], help="Scrum Master, onglet Lancement, ticket prérempli")
 
 
+def _retrospectives(bloc: tableau.Bloc) -> None:
+    if not _entete(bloc):
+        if not bloc.erreur and not bloc.note:
+            st.caption("Aucune rétrospective.")
+        return
+    for r in bloc.lignes[:5]:
+        gauche, droite = st.columns([5, 1])
+        ajuste = f" (ajusté {r['score_ajuste']}/100)" if r["score_ajuste"] is not None else ""
+        gauche.markdown(f"**{r['cle']}** · score {r['score']}/100{ajuste}  \n"
+                        f":gray[le {r['date']}] · " + (f"{r['ecarts']} écart(s) expliqué(s)" if r["analyse"]
+                                                       else "analyse indisponible"))
+        if r.get("lien"):
+            droite.link_button("Ouvrir", r["lien"], help="Agent Rétrospective, ticket prérempli")
+    if not bloc.lignes:
+        st.caption("Aucune rétrospective.")
+    propositions = bloc.resume.get("propositions") or []
+    st.markdown(f"Propositions d'amélioration en attente : **{len(propositions)}**")
+    for p in propositions[:5]:
+        gauche, droite = st.columns([5, 1])
+        gauche.markdown(f"{p['libelle']}  \n:gray[{p['levier']} · {p['tickets']} ticket(s) · en attente depuis "
+                        f"{p['depuis']}]")
+        if p.get("lien"):
+            droite.link_button("Valider", p["lien"], help="Agent Rétrospective, onglet Propositions : valider, "
+                                                         "rejeter ou reporter")
+
+
 def _couts(bloc: tableau.Bloc) -> None:
     _entete(bloc)
     r = bloc.resume
@@ -260,3 +286,5 @@ def afficher() -> None:
             _couts(t.couts)
         with st.container(border=True):
             _patchs(t.patchs)
+        with st.container(border=True):
+            _retrospectives(t.retrospectives)

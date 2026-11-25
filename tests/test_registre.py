@@ -13,8 +13,11 @@ class TestRegistre(unittest.TestCase):
     def test_exemple_valide(self):
         registre = reg.charger(reg.EXEMPLE)
         self.assertEqual([a.nom for a in registre.agents], ["scrum-master", "odatio", "dev-tool", "projets", "integration",
-                                                              "lancement", "cucumber", "revue-pr"])
-        self.assertEqual([a.port for a in registre.agents], [8501, 8502, 8503, 8504, 8505, 8506, 8507, 8508])
+                                                              "lancement", "cucumber", "revue-pr",
+                                                              "retrospective"])
+        self.assertEqual([a.port for a in registre.agents], [8501, 8502, 8503, 8504, 8505, 8506, 8507, 8508, 8509])
+        self.assertEqual(registre.agent("retrospective").secrets,
+                         ("ANTHROPIC_API_KEY", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"))   # aucun jeton d'écriture
         self.assertEqual(registre.agent("dev-tool").mode, "demande")
         self.assertTrue(all(a.domaine for a in registre.agents))
         self.assertEqual((registre.port_manager, registre.port_superviseur), (8500, 8499))

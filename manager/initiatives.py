@@ -135,7 +135,7 @@ def point_du_matin(journal: jr.Journal, t: tb.Tableau, maintenant: datetime | No
 REDIRECTIONS_JOURS = 30          # redirections examinées pour « sans suite »
 ECHECS = ("FAILURE", "UNSTABLE")
 URGENCE = ("patch_non_joint", "build_en_echec", "boucle_echecs", "generation_bloquee_heures", "patch_non_verifie_jours",
-           "redirection_sans_suite_jours", "analyse_a_valider_jours")     # ordre d'affichage
+           "redirection_sans_suite_jours", "analyse_a_valider_jours", "proposition_en_attente_jours")  # ordre d'affichage
 
 
 @dataclass
@@ -250,6 +250,15 @@ def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
             relances.append(Relance("boucle_echecs", f"boucle:{b['generation']}:{b.get('mis_a_jour', '')}",
                                     (f"Cucumber {b['client']} : boucle de correction {b['etat']} avec des échecs "
                                      f"({restants or 'à voir'}) — {b.get('raison', '')}")[:300], b.get("lien", "")))
+
+    # proposition d'amélioration d'agent-lancement (agent-retrospective) en attente de validation
+    for p in t.retrospectives.resume.get("propositions", []):
+        debut = _echu(p["depuis"], s["proposition_en_attente_jours"], maintenant)
+        if debut:
+            relances.append(Relance("proposition_en_attente_jours", f"proposition:{p['id']}:{_iso(p['depuis'])}",
+                                    f"Rétrospective : proposition « {p['libelle']} » ({p['tickets']} tickets) en "
+                                    f"attente depuis le {_jour(debut)} : valider, rejeter ou reporter",
+                                    p.get("lien", "")))
 
     # génération Cucumber en cours depuis trop longtemps
     heures = s["generation_bloquee_heures"]

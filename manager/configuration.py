@@ -79,6 +79,7 @@ RELANCES = {
     "patch_non_joint": True,              # patch livré NON joint dans Jira (immédiat)
     "build_en_echec": True,               # dernier build Cucumber d'un job en échec, jusqu'à un succès
     "boucle_echecs": True,                # boucle de correction Cucumber arrêtée avec des échecs AGENT ou APPLICATION
+    "proposition_en_attente_jours": 3,    # proposition d'amélioration d'agent-retrospective non validée
     "ignorer_jours": 7,                   # durée du masquage par « Ignorer » (jours calendaires, au moins 1)
 }
 

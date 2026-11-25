@@ -36,6 +36,14 @@ PATCHS = ("Patchs livrés ces 7 derniers jours (agent Scrum Master) :\n"
           "(ConnectionError))")
 
 
+RETROS = ("Rétrospectives :\n"
+          "- ODA-6 (le 2026-11-19 10:00) : score 62/100 · ajusté 70/100 · écarts expliqués 3 · analyse ok\n"
+          "- ODA-7 (le 2026-11-18 09:00) : score 40/100 · ajusté —/100 · écarts expliqués 0 · analyse indisponible\n"
+          "Propositions en attente :\n"
+          "- m-1 [patch] : Lire les tests voisins · tickets 2 · en attente depuis 2026-11-16 10:00\n"
+          "- m-2 [cadrage] : Relire le besoin · tickets 3 · en attente depuis 2026-11-19 08:00")
+
+
 class FauxPilote:
     def __init__(self, etats=None, erreur=False):
         self.etats, self.erreur = etats, erreur
@@ -52,7 +60,8 @@ def registre(dossier: Path) -> reg.Registre:
     return reg.lire({"agents": [
         {"nom": "scrum-master", "titre": "Scrum Master", "dossier": str(dossier), "port": 8501,
          "mcp": [sys.executable, str(FAUX_MCP)]},
-        {"nom": "odatio", "titre": "Odatio", "dossier": str(dossier), "port": 8502}]})
+        {"nom": "odatio", "titre": "Odatio", "dossier": str(dossier), "port": 8502},
+        {"nom": "retrospective", "titre": "Rétrospective", "dossier": str(dossier), "port": 8509}]})
 
 
 class TestLectures(unittest.TestCase):
@@ -180,7 +189,7 @@ class TestTableau(unittest.TestCase):
         self.journal.noter_question("Qu'est-ce qu'on a fait sur ODA-9 ?", decision="repondre", cout_usd=0.3)
         t = self.construire()
         self.assertEqual(self.appels, [("scrum-master", ["analyses", "cucumber", "builds_jenkins", "patchs",
-                                                         "boucles_cucumber"])])
+                                                         "boucles_cucumber", "retrospectives"])])
         self.assertEqual(t.agents.resume, {sup.EN_LIGNE: 1, sup.ECHEC: 1})
         self.assertEqual([a["cle"] for a in t.analyses.lignes], ["ODA-1", "ODA-3"])
         self.assertIn("localhost:8506", t.analyses.lignes[0]["lien"])   # onglet Lancement : agent-lancement
@@ -256,6 +265,38 @@ class TestTableau(unittest.TestCase):
         t = self.construire(appeler_mcp=lambda agent, appels: sources.ResultatMCP(textes={
             "patchs": "Aucun patch livré ces 7 derniers jours dans l'agent Scrum Master."}))
         self.assertEqual((t.patchs.lignes, t.patchs.erreur), ([], ""))
+
+    def test_retrospectives(self):
+        def mcp(textes=None, erreurs=None):
+            return lambda agent, appels: sources.ResultatMCP(textes=textes or {}, erreurs=erreurs or {})
+        t = self.construire(appeler_mcp=mcp({"retrospectives": RETROS}))
+        self.assertEqual([(r["cle"], r["score"], r["score_ajuste"]) for r in t.retrospectives.lignes],
+                         [("ODA-6", 62, 70), ("ODA-7", 40, None)])
+        self.assertIn("localhost:8509", t.retrospectives.lignes[0]["lien"])
+        self.assertIn("ticket=ODA-6", t.retrospectives.lignes[0]["lien"])
+        self.assertEqual([p["id"] for p in t.retrospectives.resume["propositions"]], ["m-1", "m-2"])
+        self.assertIn(t.retrospectives, t.blocs())
+        # relance : 3 jours ouvrés (m-1 du lundi 16, échue jeudi 19 ; m-2 du jeudi 19 : non)
+        relances = initiatives.relances(self.journal, t, maintenant=MAINTENANT)
+        props = [r for r in relances if r.regle == "proposition_en_attente_jours"]
+        self.assertEqual([r.cle for r in props], ["proposition:m-1:2026-11-16T10:00"])
+        self.assertIn("localhost:8509", props[0].lien)
+        self.assertFalse([r for r in initiatives.relances(self.journal, t, {"proposition_en_attente_jours": 0},
+                                                          maintenant=MAINTENANT)
+                          if r.regle == "proposition_en_attente_jours"])            # 0 : règle désactivée
+        # outil absent (scrum-master non redémarré) ou en erreur
+        t = self.construire(appeler_mcp=mcp(erreurs={"retrospectives": "Unknown tool: retrospectives"}))
+        self.assertIn("pas encore l'outil retrospectives", t.retrospectives.note)
+        self.assertFalse(any("non consultable" in a["texte"] for a in t.alertes.lignes if "retro" in a["texte"]))
+        t = self.construire(appeler_mcp=mcp(erreurs={"retrospectives": "ERREUR : x"}))
+        self.assertIn("retrospectives : ERREUR : x", t.retrospectives.erreur)
+        # agent absent du registre : lignes sans lien
+        self.registre = reg.lire({"agents": [a for a in [
+            {"nom": "scrum-master", "titre": "Scrum Master", "dossier": str(self.dossier), "port": 8501,
+             "mcp": [sys.executable, str(FAUX_MCP)]}]]})
+        t = self.construire(appeler_mcp=mcp({"retrospectives": RETROS}))
+        self.assertEqual(t.retrospectives.lignes[0]["lien"], "")
+        self.assertIn("absent du registre", t.retrospectives.note)
 
     def test_un_outil_en_erreur(self):
         def mcp(agent, appels):

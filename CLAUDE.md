@@ -135,6 +135,12 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   `.tmp/livraisons.jsonl`, écrit par son étape patch avec l'état de la pièce jointe Jira relu en GET. Un patch NON
   joint dans Jira lève une alerte ; « non vérifiée » (Jira illisible au moment de la livraison) reste dans le bloc.
   Un scrum-master sans cet outil (« Unknown tool ») affiche une invitation à le mettre à jour, sans alerte.
+- Rétrospectives : outil `retrospectives` de `mcp_lecture.py` (servi avec scrum-master, même `AGENT_DATA_DIR`), qui lit
+  les rapports `.tmp/retrospectives/<CLÉ>.json` et `propositions.json` d'agent-retrospective (port 8509, `mcp = []`,
+  contrat de format : `agent-retrospective/README.md`). Bloc « Rétrospectives » : 5 derniers tickets avec leur score,
+  propositions d'amélioration d'agent-lancement en attente, liens vers l'agent ; relance
+  `proposition_en_attente_jours`. Le manager ne valide rien : la validation et l'envoi à dev-tool se font dans l'IHM
+  d'agent-retrospective.
 - Formats lus chez scrum-master (contrat, documenté dans `sources.py`) : texte des outils de
   `tools/lecture_manager.py` et colonnes `date`, `ticket`, `etape`, `cout_usd` de `token_usage.csv` (« ; »). Un
   changement de ces formats vide le bloc concerné sans erreur : le signaler dans les deux dépôts.
@@ -160,6 +166,7 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   | `patch_non_verifie_jours` | 1 j ouvré | outil `patchs` |
   | `redirection_sans_suite_jours` | 2 j ouvrés | journal (redirection vers scrum-master, 30 j) et `etat_tickets` |
   | `analyse_a_valider_jours` | 3 j ouvrés | outil `analyses` (date de modification) |
+  | `proposition_en_attente_jours` | 3 j ouvrés | outil `retrospectives` (proposition non validée, date du dernier report sinon de création) |
 
   « Ignorer » masque `ignorer_jours` jours (7 par défaut, table `relances_ignorees`, purgée à échéance). La clé
   combine la règle, l'objet et son état (ex. `analyse:ODA-1:<date de modification>`) : si l'objet change, la relance
@@ -188,7 +195,7 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
     affiché sous la réponse, n'agit pas), `doc_sommaire`, `doc_lire`, `doc_chercher` (documentation Odatio, si
     configurée ; non simulés par les évals, ils appellent Bitbucket) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
-    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs, boucles_cucumber), odatio `mcp_server.py --manager`
+    scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs, boucles_cucumber, retrospectives), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
 - **Liens préremplis** (`manager/liens.py`) : `rediriger` ouvre l'agent au bon endroit avec
   `?source=manager&page=…&ticket=…&projet=…&conversation=…&question=…&demande=…&depot=…&contexte=…` (onglets
@@ -219,8 +226,8 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
    | Cas | Comportement |
    |---|---|
    | Question générale ou état global | Répondre seul (tableau de bord) |
-   | Question ponctuelle, en lecture seule, rapide | Interroger un ou plusieurs agents et faire la synthèse |
-   | Validation humaine, écriture, travail long ou ressource partagée (ex. job Jenkins unique) | Rediriger vers l'agent, avec un lien direct prérempli et un résumé du contexte (ex. tests Cucumber → scrum-master) |
+   | Question ponctuelle, en lecture seule, rapide (ex. score d'une rétrospective, propositions en attente → outil `retrospectives` de scrum-master) | Interroger un ou plusieurs agents et faire la synthèse |
+   | Validation humaine, écriture, travail long ou ressource partagée (ex. job Jenkins unique) | Rediriger vers l'agent, avec un lien direct prérempli et un résumé du contexte (ex. tests Cucumber → scrum-master ; lancer une rétrospective, valider ou rejeter une proposition → retrospective) |
    | Amélioration d'un agent | Rediriger vers dev-tool avec une demande prérédigée |
    | Demande ambiguë | Poser une seule question |
 
