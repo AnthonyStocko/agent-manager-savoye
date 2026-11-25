@@ -175,7 +175,7 @@ class TestRelances(unittest.TestCase):
         self.assertEqual(self.cles(datetime.now() + timedelta(hours=1)), [])                    # trop tôt
         relances = ini.relances(self.journal, self.t, {}, apres)
         self.assertEqual([r.regle for r in relances], ["redirection_sans_suite_jours"])
-        self.assertIn("page=lancement", relances[0].lien)
+        self.assertIn(":8506/", relances[0].lien)                     # page lancement → agent-lancement (liens.py)
         self.assertIn("ticket=ODA-7", relances[0].lien)
         self.journal.observer_analyses([{"cle": "ODA-7", "libelle": "brouillon", "a_valider": True,
                                          "modifiee": (datetime.now() + timedelta(minutes=5)).isoformat()[:16]}])
