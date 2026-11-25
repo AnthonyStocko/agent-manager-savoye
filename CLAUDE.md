@@ -57,6 +57,8 @@ manager/consignes.py     prompt système de l'assistant (règle de décision)
 manager/routeur.py       assistant : session Agent SDK, outils internes, serveurs MCP des agents
 manager/liens.py         liens de redirection préremplis vers les agents (lot 5)
 manager/journal.py       journal SQLite (.tmp/manager.db) : événements, index par ticket, rétention (lot 6)
+manager/doc_odatio.py    documentation Odatio en lecture seule, lue dans Bitbucket par son API (sans clone)
+mcp_doc_odatio.py        serveur MCP de la documentation, partagé par tous les agents (lecture seule)
 manager/sources.py       sources en lecture du tableau de bord : client MCP direct, token_usage.csv (lot 6)
 manager/tableau.py       blocs du tableau de bord, sans Streamlit ni modèle (lot 6)
 main.py                  CLI --step ask : assistant des agents (repris d'agent-scrum-master, qui y délègue)
@@ -86,6 +88,19 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   y réécrivent pas ; odatio charge aussi les applications de `commun.toml` comme projets. Un agent non adapté
   garde la priorité à son `.env`.
 - L'import (`migration.py`) complète sans écraser et ne modifie jamais les fichiers des agents.
+
+### Documentation Odatio
+
+- Le site publié est derrière une connexion Microsoft (Entra ID) : on lit ses **sources** dans Bitbucket, par
+  l'API REST, **sans clone** (décision du 25 novembre 2026). Accès non secrets `ODATIO_DOC_DEPOT` (URL ou
+  `PROJET/depot`), `ODATIO_DOC_BRANCHE`, `ODATIO_DOC_DOSSIER`, transmis à tous les agents ; jeton : le
+  `BITBUCKET_HTTP_TOKEN` existant (lecture), selon le registre. Aucun nouveau secret.
+- `manager/doc_odatio.py` : sommaire (`files`, paginé, 10 min en mémoire), lecture (`raw`, 800 lignes et 60 000
+  caractères au plus), recherche (API `search`, seul POST, en lecture ; n'indexe que la branche par défaut ; repli
+  sur les noms de fichiers). Chemins bornés au dossier de la doc (ni `..` ni absolu) ; le jeton n'est envoyé qu'à
+  l'hôte de `BITBUCKET_URL`. Une page publiée (`…/development/index.html`) est ramenée à sa source.
+- `mcp_doc_odatio.py` : serveur partagé, lancé par chaque agent avec son python. Il relit les accès non secrets
+  manquants dans `commun.toml`, **jamais** le jeton dans `config/.env` (moindre privilège : l'agent le lui passe).
 
 ### Superviseur
 
@@ -159,7 +174,8 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
   `permission_mode="dontAsk"`, `strict_mcp_config`, `setting_sources=[]` :
   - internes (serveur « manager ») : `etat_agents`, `applications`, `historique_ticket` (journal du manager et
     dernier état relevé de l'analyse, sans réinterroger les agents, lot 6), `rediriger` (prépare un lien prérempli
-    affiché sous la réponse, n'agit pas) ;
+    affiché sous la réponse, n'agit pas), `doc_sommaire`, `doc_lire`, `doc_chercher` (documentation Odatio, si
+    configurée ; non simulés par les évals, ils appellent Bitbucket) ;
   - serveurs MCP des agents (champ `mcp` du registre), lancés avec leur venv et `configuration.variables_pour` :
     scrum-master `mcp_lecture.py` (analyses, ticket, cucumber, builds_jenkins, patchs), odatio `mcp_server.py --manager`
     (projets, question : réponse en lecture seule, conversation reprise dans l'IHM d'odatio).
@@ -245,3 +261,6 @@ devenues des relances).
   livraison apparaît « NON jointe » au lieu de « non vérifiée » (`jira_tools.get_jira_attachment_names`, côté
   scrum-master).
 - Tableau de bord : seul scrum-master est interrogé ; odatio `projets` n'y apporte rien d'utile aujourd'hui.
+- **Documentation Odatio** : chaque agent doit déclarer `mcp_doc_odatio.py` dans ses sessions Claude (demande à
+  dev-tool, dépôt par dépôt ou dans agent-socle). dev-tool et projets n'ont pas le jeton Bitbucket de lecture : à
+  leur ajouter seulement si le besoin se confirme. La recherche plein texte dépend de l'index de Bitbucket.

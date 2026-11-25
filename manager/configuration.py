@@ -59,6 +59,12 @@ ACCES = (
     Acces("GROUNDCOVER_API_URL", "Adresse de l'API", "groundcover"),
     Acces("GROUNDCOVER_BACKEND_ID", "Identifiant du backend", "groundcover"),
     Acces("GROUNDCOVER_API_KEY", "Clé API", "groundcover", secret=True),
+    Acces("ODATIO_DOC_DEPOT", "Dépôt des sources", "Documentation Odatio",
+          aide="dépôt Bitbucket des sources de la doc (URL ou PROJET/depot), lu par l'API avec le jeton de lecture "
+               "Bitbucket, sans clone"),
+    Acces("ODATIO_DOC_BRANCHE", "Branche", "Documentation Odatio", aide="vide = branche par défaut du dépôt"),
+    Acces("ODATIO_DOC_DOSSIER", "Dossier de la doc", "Documentation Odatio",
+          aide="sous-dossier des sources dans le dépôt ; vide = tout le dépôt"),
 )
 NON_SECRETS = tuple(a.variable for a in ACCES if not a.secret)
 SECRETS = tuple(a.variable for a in ACCES if a.secret)

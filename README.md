@@ -99,11 +99,27 @@ Onglet **Configuration** :
   job Jenkins), avec leurs mots de passe ;
 - **Import** : reprend une fois les `.env` des agents et les projets d'agent-odatio. Rien n'est écrit avant ta
   validation, les fichiers des agents ne sont pas modifiés, ce qui existe déjà est gardé ;
+- **Documentation Odatio** : dépôt Bitbucket des sources de la documentation, branche et dossier ;
 - **Registre des agents** : ports, modes et secrets transmis à chacun.
 
 Fichiers : `config/commun.toml` (sans secret) et `config/.env` (secrets), jamais versionnés. Au lancement, chaque
 agent reçoit les accès communs et **seulement les secrets que le registre lui autorise** ; après une
 modification, redémarre-le depuis l'onglet Agents.
+
+## Documentation Odatio
+
+Le site de la documentation est derrière une connexion Microsoft : les agents lisent donc ses **sources**, directement
+dans Bitbucket par son API REST, sans clone, avec le jeton de lecture `BITBUCKET_HTTP_TOKEN`. Renseigne le dépôt
+(URL ou `PROJET/depot`), la branche et le dossier dans Configuration › Accès › Documentation Odatio, puis redémarre
+les agents.
+
+- L'onglet **Assistant** du manager la consulte avec `doc_sommaire`, `doc_chercher` et `doc_lire`.
+- Chaque agent la consulte avec le serveur MCP partagé `mcp_doc_odatio.py` (mêmes outils, lecture seule), qu'il
+  déclare dans ses sessions Claude, lancé avec son propre python et le jeton qu'il a reçu du manager.
+
+`doc_lire` accepte aussi l'adresse d'une page du site publié (…/development/index.html) et retrouve sa source.
+`doc_chercher` utilise la recherche de code de Bitbucket si elle est activée (branche par défaut seulement), sinon
+les noms de fichiers.
 
 ## Tests
 

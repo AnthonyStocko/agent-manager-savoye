@@ -72,6 +72,24 @@ class TestRouteur(unittest.TestCase):
         self.assertEqual(o.env["CLAUDE_CONFIG_DIR"], str(Path("/compte")))
         self.assertIn("MCP_TOOL_TIMEOUT", o.env)
         self.assertIn("odatio — Odatio, http://localhost:8502, lancé avec le manager ; pas d'outil", o.system_prompt)
+        self.assertNotIn("doc_lire", o.system_prompt)                          # documentation non configurée
+
+    def test_documentation_odatio(self):
+        conf.enregistrer(conf.Commun(acces={"CLAUDE_AUTH": "compte", "BITBUCKET_URL": "https://git.exemple.io",
+                                            "ODATIO_DOC_DEPOT": "DOC/odatio-docs"}), self.config)
+        conf.enregistrer_secrets({"BITBUCKET_HTTP_TOKEN": "lecture"}, self.config)
+        r = routeur.Routeur(registre(self.dossier), self.config, "Anthony", pilote=FauxPilote(), journal=self.journal)
+        o = r.options()
+        for outil in ("doc_sommaire", "doc_lire", "doc_chercher"):
+            self.assertIn(f"mcp__manager__{outil}", o.allowed_tools)
+        self.assertIn("## Documentation Odatio", o.system_prompt)
+        self.assertIn("Règle de décision", o.system_prompt)                     # règle inchangée
+        self.assertEqual(r.variables_doc()["BITBUCKET_HTTP_TOKEN"], "lecture")
+        # un outil en erreur répond proprement (réseau coupé ou refusé), sans lever
+        outil = {t.name: t for t in r.outils_internes()}["doc_sommaire"]
+        resultat = asyncio.run(outil.handler({"dossier": "../x"}))
+        self.assertTrue(resultat["is_error"])
+        self.assertIn("chemin refusé", resultat["content"][0]["text"])
 
     def outil(self, nom):
         return next(t for t in self.routeur.outils_internes() if t.name == nom)

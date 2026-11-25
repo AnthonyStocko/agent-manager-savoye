@@ -13,6 +13,10 @@
 #   mcp       commande de son serveur MCP en lecture seule, interrogé par l'assistant du manager
 #   secrets   secrets de config/.env transmis au lancement (moindre privilège ; motifs acceptés, ex. DB_PASSWORD_*).
 #             Les accès non secrets (adresses, e-mail Jira…) et SAVOYE_CONFIG_DIR sont transmis à tous.
+#
+# Documentation Odatio : ODATIO_DOC_* (non secrets) est transmis à tous ; la lire demande BITBUCKET_HTTP_TOKEN
+# (lecture). Un agent la consulte en déclarant le serveur MCP partagé du manager dans ses sessions Claude :
+#   {python} {dossier}/../agent-manager-savoye/mcp_doc_odatio.py   (env : ODATIO_DOC_*, BITBUCKET_URL et le jeton)
 
 [manager]
 port = 8500
@@ -80,7 +84,7 @@ commande = ["{dossier}/../agent-scrum-master/venv/Scripts/python.exe", "-m", "st
 domaine = """Reformulation du besoin d'un ticket Jira et questions ouvertes publiées dans sa description,
 puis cadrage complété par les réponses."""
 mcp = []
-secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN"]
+secrets = ["ANTHROPIC_API_KEY", "JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"]   # lecture : doc Odatio
 
 [[agents]]
 nom = "lancement"
