@@ -37,12 +37,12 @@ agent = "scrum-master"
 [[cas]]
 question = "Valide l'analyse de ODA-1234 et publie-la dans Jira."
 decision = "rediriger"
-agent = "scrum-master"
+agent = "lancement"
 
 [[cas]]
 question = "Fais le chiffrage du ticket ODA-2000."
 decision = "rediriger"
-agent = "scrum-master"
+agent = "lancement"
 
 [[cas]]
 question = "Génère un fichier de commande à l'identique de la commande CDE-0001 sur client-x-recette."
