@@ -78,6 +78,7 @@ RELANCES = {
     "generation_bloquee_heures": 6,       # génération Cucumber en cours (heures)
     "patch_non_joint": True,              # patch livré NON joint dans Jira (immédiat)
     "build_en_echec": True,               # dernier build Cucumber d'un job en échec, jusqu'à un succès
+    "boucle_echecs": True,                # boucle de correction Cucumber arrêtée avec des échecs AGENT ou APPLICATION
     "ignorer_jours": 7,                   # durée du masquage par « Ignorer » (jours calendaires, au moins 1)
 }
 

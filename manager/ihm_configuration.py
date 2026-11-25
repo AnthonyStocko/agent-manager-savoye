@@ -42,6 +42,9 @@ SEUILS = {   # libellé et aide de chaque seuil de conf.RELANCES
     "generation_bloquee_heures": ("Génération Cucumber en cours (heures)", "0 : règle désactivée."),
     "patch_non_joint": ("Patch livré NON joint dans Jira", "Relance immédiate."),
     "build_en_echec": ("Dernier build Cucumber d'un job en échec", "Jusqu'à un build réussi."),
+    "boucle_echecs": ("Boucle de correction Cucumber arrêtée avec des échecs",
+                      "Échecs dus à l'agent non résolus (lien vers dev-tool, demande préremplie) ou défauts de "
+                      "l'application à traiter (lien vers l'agent Cucumber)."),
     "ignorer_jours": ("« Ignorer » masque une relance pendant (jours)", "Elle revient plus tôt si la situation "
                                                                         "change."),
 }

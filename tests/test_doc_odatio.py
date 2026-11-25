@@ -168,6 +168,45 @@ class TestDocumentation(unittest.TestCase):
         self.assertNotRegex(source, r"(?<!url)open\(")
 
 
+class TestAntora(unittest.TestCase):
+    """Site Antora : la page publiée …/<composant>/[<version>/][<module>/]<page>.html vient de
+    modules/<module>/pages/<page>.adoc."""
+    ANTORA = ["antora.yml", "modules/ROOT/nav.adoc", "modules/ROOT/pages/index.adoc",
+              "modules/ROOT/pages/guide/stock.adoc", "modules/development/pages/index.adoc",
+              "modules/development/pages/api/rest.adoc", "modules/development/images/schema.png"]
+
+    def documentation(self, fichiers):
+        d = doc.Documentation({**CONFIG, "ODATIO_DOC_DOSSIER": ""}, ouvrir=FauxBitbucket())
+        d.fichiers = lambda: sorted(fichiers)
+        return d
+
+    def test_pages_publiees(self):
+        d = self.documentation(self.ANTORA)
+        cas = {"https://site.exemple/doc/odatio-docs/development/index.html": "modules/development/pages/index.adoc",
+               "development/api/rest.html": "modules/development/pages/api/rest.adoc",
+               "https://site.exemple/doc/odatio-docs/index.html": "modules/ROOT/pages/index.adoc",
+               "guide/stock.html": "modules/ROOT/pages/guide/stock.adoc",
+               "https://site.exemple/doc/odatio-docs/1.0/guide/stock.html": "modules/ROOT/pages/guide/stock.adoc",
+               "modules/ROOT/pages/index.adoc": "modules/ROOT/pages/index.adoc"}
+        for chemin, attendu in cas.items():
+            with self.subTest(chemin):
+                self.assertEqual(d.resoudre(chemin), attendu)
+
+    def test_version_dans_l_adresse(self):
+        # « development » est une version : la page vient du module ROOT
+        d = self.documentation(["modules/ROOT/pages/index.adoc", "modules/ROOT/pages/guide/stock.adoc"])
+        self.assertEqual(d.resoudre("https://site.exemple/doc/odatio-docs/development/index.html"),
+                         "modules/ROOT/pages/index.adoc")
+
+    def test_sources_dans_un_sous_dossier(self):
+        d = self.documentation(["docs/modules/development/pages/index.adoc", "docs/antora.yml"])
+        self.assertEqual(d.resoudre("development/index.html"), "docs/modules/development/pages/index.adoc")
+
+    def test_introuvable(self):
+        with self.assertRaises(doc.DocErreur):
+            self.documentation(self.ANTORA).resoudre("development/absente.html")
+
+
 class TestServeurMcp(unittest.TestCase):
     def test_ne_relit_aucun_secret_sur_disque(self):
         with tempfile.TemporaryDirectory() as t:

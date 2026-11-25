@@ -179,7 +179,8 @@ class TestTableau(unittest.TestCase):
     def test_tous_les_blocs(self):
         self.journal.noter_question("Qu'est-ce qu'on a fait sur ODA-9 ?", decision="repondre", cout_usd=0.3)
         t = self.construire()
-        self.assertEqual(self.appels, [("scrum-master", ["analyses", "cucumber", "builds_jenkins", "patchs"])])
+        self.assertEqual(self.appels, [("scrum-master", ["analyses", "cucumber", "builds_jenkins", "patchs",
+                                                         "boucles_cucumber"])])
         self.assertEqual(t.agents.resume, {sup.EN_LIGNE: 1, sup.ECHEC: 1})
         self.assertEqual([a["cle"] for a in t.analyses.lignes], ["ODA-1", "ODA-3"])
         self.assertIn("localhost:8506", t.analyses.lignes[0]["lien"])   # onglet Lancement : agent-lancement

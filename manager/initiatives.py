@@ -134,7 +134,7 @@ def point_du_matin(journal: jr.Journal, t: tb.Tableau, maintenant: datetime | No
 # --- relances ---------------------------------------------------------------------------------------------------
 REDIRECTIONS_JOURS = 30          # redirections examinées pour « sans suite »
 ECHECS = ("FAILURE", "UNSTABLE")
-URGENCE = ("patch_non_joint", "build_en_echec", "generation_bloquee_heures", "patch_non_verifie_jours",
+URGENCE = ("patch_non_joint", "build_en_echec", "boucle_echecs", "generation_bloquee_heures", "patch_non_verifie_jours",
            "redirection_sans_suite_jours", "analyse_a_valider_jours")     # ordre d'affichage
 
 
@@ -239,6 +239,17 @@ def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
                 relances.append(Relance("build_en_echec", f"build:{b['job']}:{b['numero']}",
                                         f"Cucumber : dernier build {b['job']} #{b['numero']} en échec "
                                         f"({b['resultat']}, {b['debut']})", lien(page="cucumber")))
+
+    # boucle de correction Cucumber arrêtée avec des échecs dus à l'agent non résolus, ou des défauts applicatifs
+    if s.get("boucle_echecs", True):
+        for b in t.boucles.lignes:
+            if not b.get("relance") or b.get("etat") == "en cours":
+                continue
+            restants = ", ".join(f"{c} {n}" for c, n in b.get("categories", {}).items() if n and c in
+                                 ("AGENT", "INCERTAIN", "APPLICATION"))
+            relances.append(Relance("boucle_echecs", f"boucle:{b['generation']}:{b.get('mis_a_jour', '')}",
+                                    (f"Cucumber {b['client']} : boucle de correction {b['etat']} avec des échecs "
+                                     f"({restants or 'à voir'}) — {b.get('raison', '')}")[:300], b.get("lien", "")))
 
     # génération Cucumber en cours depuis trop longtemps
     heures = s["generation_bloquee_heures"]
