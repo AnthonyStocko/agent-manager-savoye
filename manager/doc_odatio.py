@@ -122,6 +122,26 @@ def _normaliser(chemin: str) -> str:
     return "" if propre == "." else propre
 
 
+def candidats_antora(page: str) -> list[str]:
+    """Sources Antora possibles d'une page publiée, de la plus probable à la moins probable.
+
+    Antora publie ``modules/<module>/pages/<page>.adoc`` sous ``[<version>/][<module>/]<page>.html`` (module ROOT
+    et version par défaut omis). « development/index.html » peut donc venir de modules/ROOT/pages/development/
+    index.adoc, de modules/development/pages/index.adoc, ou d'une version « development » (modules/ROOT/pages/
+    index.adoc). Les chemins rendus sont relatifs : ils se comparent à la fin des fichiers du dépôt."""
+    parties = [p for p in re.sub(r"\.html?$", "", page).split("/") if p]
+    if not parties:
+        parties = ["index"]
+    candidats = []
+    for saut in range(0, min(2, len(parties) - 1) + 1):            # 0, 1 ou 2 segments de tête : version…
+        reste = parties[saut:]
+        candidats.append("modules/ROOT/pages/" + "/".join(reste) + ".adoc")
+        if len(reste) > 1:
+            candidats.append(f"modules/{reste[0]}/pages/" + "/".join(reste[1:]) + ".adoc")
+        candidats.append("modules/ROOT/pages/" + "/".join(reste) + "/index.adoc")
+    return list(dict.fromkeys(candidats))
+
+
 # ---------------------------------------------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------------------------------------------
@@ -234,6 +254,12 @@ class Documentation:
         for c in candidats:
             if c in tous:
                 return c
+        for antora in candidats_antora(propre):                     # site Antora : modules/<m>/pages/<page>.adoc
+            trouves = [f for f in tous if f == antora or f.endswith("/" + antora)]
+            if len(trouves) == 1:
+                return trouves[0]
+            if trouves:
+                raise DocErreur(f"« {chemin} » est ambigu : " + ", ".join(trouves[:10]))
         suffixes = tuple("/" + c for c in candidats)                # site publié dans un sous-dossier des sources
         trouves = [f for f in tous if f.endswith(suffixes)]
         if len(trouves) == 1:

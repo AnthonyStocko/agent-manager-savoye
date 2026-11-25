@@ -98,7 +98,9 @@ tests/                   tests unitaires ; tests/faux_agent.py simule un agent S
 - `manager/doc_odatio.py` : sommaire (`files`, paginé, 10 min en mémoire), lecture (`raw`, 800 lignes et 60 000
   caractères au plus), recherche (API `search`, seul POST, en lecture ; n'indexe que la branche par défaut ; repli
   sur les noms de fichiers). Chemins bornés au dossier de la doc (ni `..` ni absolu) ; le jeton n'est envoyé qu'à
-  l'hôte de `BITBUCKET_URL`. Une page publiée (`…/development/index.html`) est ramenée à sa source.
+  l'hôte de `BITBUCKET_URL`. Une page publiée (`…/development/index.html`) est ramenée à sa source, y compris
+  pour un site **Antora** (`modules/<module>/pages/<page>.adoc` ; version et module ROOT omis dans l'adresse :
+  `doc_odatio.candidats_antora`).
 - `mcp_doc_odatio.py` : serveur partagé, lancé par chaque agent avec son python. Il relit les accès non secrets
   manquants dans `commun.toml`, **jamais** le jeton dans `config/.env` (moindre privilège : l'agent le lui passe).
 
