@@ -53,6 +53,9 @@ titre = "Outillage de développement"
 dossier = "../agent-dev-tool-savoye"
 port = 8503
 mode = "demande"
+# API locale du mode autonome (boucle de correction d'agent-cucumber) ouverte au lancement, même sans navigateur
+commande = ["{python}", "-m", "agent_dev.lancer", "--server.port", "{port}", "--server.address", "127.0.0.1",
+            "--server.headless", "true"]
 domaine = """Évolution du code des agents (dont le manager) : analyse, plan, développement dans un chantier
 isolé, PR ; extraction et comparaison des prompts et outils d'un agent."""
 mcp = []
