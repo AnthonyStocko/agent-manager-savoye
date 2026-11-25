@@ -71,6 +71,12 @@ def creer_serveur() -> MCPServer:
     def boucles_cucumber(nombre: int = 5) -> str:
         return _appel(lecture.boucles, lecture.WORKSPACE_DIR, nombre)
 
+    @serveur.tool(description="Rétrospectives d'agent-retrospective (patch d'agent-lancement comparé au code fusionné) :"
+                              " ticket, date, score, écarts expliqués, et propositions d'amélioration d'agent-lancement"
+                              " en attente de validation. 'nombre' : de 1 à 50, 10 par défaut. Lecture seule.")
+    def retrospectives(nombre: int = 10) -> str:
+        return _appel(lecture.retrospectives, lecture.WORKSPACE_DIR, nombre)
+
     return serveur
 
 

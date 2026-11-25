@@ -219,3 +219,68 @@ def boucles(racine: str = WORKSPACE_DIR, nombre: int = BOUCLES_MAX) -> str:
         if b.get("demande_texte"):
             lignes.append(f"  demande : {' / '.join(str(b['demande_texte']).splitlines())[:1400]}")
     return _masque("Boucles de correction Cucumber :\n" + "\n".join(lignes))
+
+
+RETROS_MAX = 10
+_SEPARATEUR = re.compile(r"\s*·\s*")
+
+
+def _ligne(texte, limite: int = 150) -> str:
+    """Texte d'une valeur sur une ligne, sans le séparateur « · » du format."""
+    return _SEPARATEUR.sub(", ", " ".join(str(texte or "").split()))[:limite]
+
+
+def retrospectives(racine: str = WORKSPACE_DIR, nombre: int = RETROS_MAX) -> str:
+    """Rétrospectives d'agent-retrospective (.tmp/retrospectives/<CLÉ>.json, de la plus récente à la plus ancienne)
+    et propositions d'amélioration d'agent-lancement en attente de validation (propositions.json).
+
+    Format (contrat avec agent-manager-savoye, sources.lire_retrospectives) :
+    ``Rétrospectives :`` puis une ligne par ticket
+    ``- <CLÉ> (le AAAA-MM-JJ HH:MM) : score <n>/100 · ajusté <n|—>/100 · écarts expliqués <k> · analyse <ok|indisponible>``
+    (ou ``- aucune``), puis ``Propositions en attente :`` et une ligne par proposition
+    ``- <id> [<levier>] : <libellé> · tickets <k> · en attente depuis AAAA-MM-JJ HH:MM`` (ou ``- aucune``).
+    « en attente depuis » : date du dernier report, sinon de création.
+    """
+    import json
+    try:
+        nombre = max(1, min(int(nombre or RETROS_MAX), 50))
+    except (TypeError, ValueError):
+        raise LectureErreur(f"Nombre invalide : « {nombre} ».")
+    dossier = os.path.join(racine, ".tmp", "retrospectives")
+    rapports = []
+    for chemin in glob.glob(os.path.join(dossier, "*.json")):
+        if not CLE.match(os.path.splitext(os.path.basename(chemin))[0]):
+            continue
+        try:
+            with open(chemin, encoding="utf-8") as f:
+                r = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if isinstance(r, dict) and CLE.match(str(r.get("ticket", ""))):
+            rapports.append(r)
+    rapports.sort(key=lambda r: str(r.get("date", "")), reverse=True)
+    lignes = ["Rétrospectives :"]
+    for r in rapports[:nombre]:
+        analyse = r.get("analyse") if isinstance(r.get("analyse"), dict) else None
+        ajuste = r.get("score_ajuste")
+        lignes.append(f"- {r['ticket']} (le {str(r.get('date', ''))[:16].replace('T', ' ')}) : "
+                      f"score {int(r.get('score') or 0)}/100 · ajusté {ajuste if isinstance(ajuste, int) else '—'}/100"
+                      f" · écarts expliqués {len((analyse or {}).get('ecarts') or [])}"
+                      f" · analyse {'ok' if analyse else 'indisponible'}")
+    if len(lignes) == 1:
+        lignes.append("- aucune")
+    try:
+        with open(os.path.join(dossier, "propositions.json"), encoding="utf-8") as f:
+            props = (json.load(f) or {}).get("propositions") or {}
+    except (OSError, ValueError, AttributeError):
+        props = {}
+    attente = sorted((p for p in props.values() if isinstance(p, dict) and p.get("etat") == "proposee"),
+                     key=lambda p: str(p.get("reportee_le") or p.get("cree_le") or ""))
+    lignes.append("Propositions en attente :")
+    for p in attente:
+        depuis = str(p.get("reportee_le") or p.get("cree_le") or "")[:16].replace("T", " ")
+        lignes.append(f"- {_ligne(p.get('id'), 40)} [{_ligne(p.get('levier'), 40)}] : {_ligne(p.get('libelle'))}"
+                      f" · tickets {len(p.get('tickets') or [])} · en attente depuis {depuis}")
+    if not attente:
+        lignes.append("- aucune")
+    return _masque("\n".join(lignes))

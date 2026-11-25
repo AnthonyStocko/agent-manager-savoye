@@ -45,6 +45,9 @@ SEUILS = {   # libellé et aide de chaque seuil de conf.RELANCES
     "boucle_echecs": ("Boucle de correction Cucumber arrêtée avec des échecs",
                       "Échecs dus à l'agent non résolus (lien vers dev-tool, demande préremplie) ou défauts de "
                       "l'application à traiter (lien vers l'agent Cucumber)."),
+    "proposition_en_attente_jours": ("Proposition d'amélioration d'agent-lancement en attente (jours ouvrés)",
+                                     "Proposée par agent-retrospective, ni validée, ni rejetée, ni reportée depuis. "
+                                     "0 : règle désactivée."),
     "ignorer_jours": ("« Ignorer » masque une relance pendant (jours)", "Elle revient plus tôt si la situation "
                                                                         "change."),
 }

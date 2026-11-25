@@ -20,6 +20,10 @@ Formats lus (contrat avec scrum-master ; un format inattendu donne une liste vid
   ENVIRONNEMENT <n>, INCERTAIN <n> · coût <x> $ · relance <oui|non> · mis à jour <ISO>``, puis lignes indentées
   ``raison : …``, ``correction it<i> <commit> : <cause>``, ``retour arrière it<i> <commit> → <revert>``,
   ``demande : <texte>`` ;
+- outil ``retrospectives`` (agent-retrospective, lecture_manager.retrospectives) : ``Rétrospectives :`` puis
+  ``- <CLE> (le AAAA-MM-JJ HH:MM) : score <n>/100 · ajusté <n|—>/100 · écarts expliqués <k> · analyse <ok|indisponible>``,
+  puis ``Propositions en attente :`` et ``- <id> [<levier>] : <libellé> · tickets <k> · en attente depuis
+  AAAA-MM-JJ HH:MM`` (« - aucune » si la liste est vide) ;
 - fichier ``<dossier scrum-master>/.tmp/token_usage.csv`` (main.py, TOKEN_USAGE_FIELDS) : séparateur « ; »,
   en-tête, colonnes lues ``date`` (ISO), ``ticket``, ``etape``, ``cout_usd`` (point ou virgule décimale).
 """
@@ -39,7 +43,8 @@ from manager import registre as reg
 
 DELAI_MCP_S = 30.0
 LISTE_BLANCHE = {
-    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs", "boucles_cucumber"),
+    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs", "boucles_cucumber",
+                     "retrospectives"),
     "odatio": ("projets",),
 }
 TOKEN_USAGE = Path(".tmp") / "token_usage.csv"
@@ -274,3 +279,31 @@ def lire_boucles(texte: str) -> list[dict]:
         elif detail.startswith("demande : "):
             b["demande"] = detail[len("demande : "):].replace(" / ", "\n")
     return boucles
+
+
+_RETRO = re.compile(r"^- (?P<cle>[A-Z][A-Z0-9_]+-\d+) \(le (?P<date>[^)]*)\) : score (?P<score>\d+)/100"
+                    r" · ajusté (?P<ajuste>\d+|—)/100 · écarts expliqués (?P<ecarts>\d+) · analyse (?P<analyse>\S+)\s*$")
+_PROPOSITION = re.compile(r"^- (?P<id>\S+) \[(?P<levier>[^\]]*)\] : (?P<libelle>.*?) · tickets (?P<tickets>\d+)"
+                          r" · en attente depuis (?P<depuis>.*?)\s*$")
+
+
+def lire_retrospectives(texte: str) -> tuple[list[dict], list[dict]]:
+    """([{cle, date, score, score_ajuste, ecarts, analyse}], [{id, levier, libelle, tickets, depuis}]) depuis l'outil
+    ``retrospectives`` ; ([], []) si le format est inattendu."""
+    retros, propositions, section = [], [], ""
+    for ligne in (texte or "").splitlines():
+        ligne = ligne.strip()
+        if ligne in ("Rétrospectives :", "Propositions en attente :"):
+            section = ligne
+            continue
+        m = _RETRO.match(ligne) if section == "Rétrospectives :" else _PROPOSITION.match(ligne) if section else None
+        if not m:
+            continue
+        if section == "Rétrospectives :":
+            retros.append({"cle": m["cle"], "date": m["date"], "score": int(m["score"]),
+                           "score_ajuste": None if m["ajuste"] == "—" else int(m["ajuste"]),
+                           "ecarts": int(m["ecarts"]), "analyse": m["analyse"] == "ok"})
+        else:
+            propositions.append({"id": m["id"], "levier": m["levier"], "libelle": m["libelle"],
+                                 "tickets": int(m["tickets"]), "depuis": m["depuis"]})
+    return retros, propositions

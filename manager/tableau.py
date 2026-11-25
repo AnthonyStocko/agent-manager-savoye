@@ -26,6 +26,10 @@ BUILDS = 10              # lus par job (point du matin : builds terminés sur la
 BUILDS_AFFICHES = 3      # affichés par job dans le bloc Jenkins
 ETATS_ALERTE = (sup.ECHEC, sup.INJOIGNABLE, sup.INSTALLATION)
 PATCHS_JOURS = 7
+RETROS = 10             # rétrospectives lues (outil retrospectives de scrum-master)
+RETRO = "retrospective"  # nom de l'agent au registre
+RETROS_ABSENT = ("Scrum Master n'a pas encore l'outil retrospectives (mcp_lecture.py d'agent-manager-savoye) : "
+                 "le redémarrer pour voir les rétrospectives.")
 PATCHS_ABSENT = ("Scrum Master n'a pas encore l'outil patchs (registre des livraisons, agent-scrum-master#49) : "
                  "le mettre à jour pour voir les patchs livrés.")
 
@@ -50,10 +54,11 @@ class Tableau:
     alertes: Bloc
     genere_le: str = ""
     boucles: Bloc = field(default_factory=lambda: Bloc("Boucles de correction Cucumber"))
+    retrospectives: Bloc = field(default_factory=lambda: Bloc("Rétrospectives"))
 
     def blocs(self) -> list[Bloc]:
         return [self.alertes, self.agents, self.tickets, self.analyses, self.jenkins, self.boucles, self.patchs,
-                self.couts]
+                self.retrospectives, self.couts]
 
 
 def _lien(agent: reg.Agent | None, ticket: str = "", page: str = "lancement") -> str:
@@ -97,16 +102,18 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
                        dict.fromkeys(e.get("etat") for e in etats)}
 
     # --- scrum-master : analyses, cucumber, builds, patchs (un seul lancement du serveur MCP) -------------------
-    textes, erreur_scrum, erreur_patchs, erreur_boucles = {}, "", "", ""
+    textes, erreur_scrum, erreur_patchs, erreur_boucles, erreur_retros = {}, "", "", "", ""
     if scrum is None:
         erreur_scrum = "scrum-master absent du registre"
     else:
         try:
             r = appeler_mcp(scrum, [("analyses", {}), ("cucumber", {}), ("builds_jenkins", {"nombre": BUILDS}),
-                                    ("patchs", {"jours": PATCHS_JOURS}), ("boucles_cucumber", {})])
+                                    ("patchs", {"jours": PATCHS_JOURS}), ("boucles_cucumber", {}),
+                                    ("retrospectives", {"nombre": RETROS})])
             textes, erreurs = r.textes, dict(r.erreurs)
             erreur_patchs = erreurs.pop("patchs", "")          # rapportée dans son bloc, sans alerte
             erreur_boucles = erreurs.pop("boucles_cucumber", "")
+            erreur_retros = erreurs.pop("retrospectives", "")
             if erreurs:
                 erreur_scrum = " ; ".join(f"{o} : {m}" for o, m in erreurs.items())
         except sources.SourceErreur as e:
@@ -184,6 +191,21 @@ def construire(registre: reg.Registre, journal: jr.Journal, pilote, appeler_mcp=
         t.patchs.note = PATCHS_ABSENT
     else:
         t.patchs.erreur = (erreur_patchs and f"patchs : {erreur_patchs}"[:300]) or erreur_scrum or "patchs indisponibles"
+
+    # --- rétrospectives d'agent-retrospective (lues par scrum-master) et propositions en attente ----------------
+    if "retrospectives" in textes:
+        retro = _agent(registre, RETRO)
+        retros, propositions = sources.lire_retrospectives(textes["retrospectives"])
+        t.retrospectives.lignes = [{**r, "lien": _lien(retro, r["cle"], page="")} for r in retros]
+        lien_props = _lien(retro, page="")
+        t.retrospectives.resume = {"propositions": [{**p, "lien": lien_props} for p in propositions]}
+        if not retro:
+            t.retrospectives.note = "Agent retrospective absent du registre : liens indisponibles."
+    elif "unknown tool" in erreur_retros.lower():
+        t.retrospectives.note = RETROS_ABSENT
+    else:
+        t.retrospectives.erreur = ((erreur_retros and f"retrospectives : {erreur_retros}"[:300]) or erreur_scrum
+                                   or "rétrospectives indisponibles")
 
     # --- coûts --------------------------------------------------------------------------------------------------
     try:

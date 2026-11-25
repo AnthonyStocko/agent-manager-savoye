@@ -57,3 +57,13 @@ agent = "dev-tool"
 [[cas]]
 question = "Pourquoi c'est bloqué ?"
 decision = "repondre"
+
+[[cas]]
+question = "Quel score a eu la rétrospective de ODA-1234, et reste-t-il des propositions d'amélioration en attente ?"
+decision = "interroger"
+agent = "scrum-master"
+
+[[cas]]
+question = "Lance la rétrospective du ticket ODA-1234, il vient d'être fusionné."
+decision = "rediriger"
+agent = "retrospective"
