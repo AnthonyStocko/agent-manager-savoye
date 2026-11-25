@@ -2,7 +2,8 @@
 
 Outils, tous en LECTURE SEULE :
 - outils internes (serveur MCP dans le processus, « manager ») : etat_agents, applications, historique_ticket
-  (journal du manager, lot 6 : sans réinterroger les agents), rediriger ;
+  (journal du manager, lot 6 : sans réinterroger les agents), rediriger, et doc_sommaire, doc_lire, doc_chercher
+  (documentation Odatio lue dans Bitbucket, doc_odatio.py) quand ODATIO_DOC_DEPOT est configuré ;
 - serveurs MCP des agents, déclarés dans le registre (champ ``mcp``) et lancés avec leur venv et la configuration
   commune qui leur revient (``configuration.variables_pour``, moindre privilège).
 Aucun outil intégré de Claude Code (ni Bash, ni Read, ni Edit) ; réglages et CLAUDE.md du poste ignorés.
@@ -13,6 +14,7 @@ Aucun outil intégré de Claude Code (ni Bash, ni Read, ni Edit) ; réglages et 
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import getpass
 from dataclasses import dataclass, field
@@ -23,6 +25,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
 
 from manager import configuration as conf
 from manager import consignes
+from manager import doc_odatio
 from manager import journal as jr
 from manager import liens
 from manager import registre as reg
@@ -167,7 +170,50 @@ class Routeur:
                           + (f", prérempli ({', '.join(prerempli)})" if prerempli else "") + f".{ignore}{demarrage} "
                           "Termine ta réponse en une ou deux phrases.")
 
-        return [etat_agents, applications, historique_ticket, rediriger]
+        return [etat_agents, applications, historique_ticket, rediriger] + self.outils_doc()
+
+    def variables_doc(self) -> dict:
+        """Accès de la documentation Odatio pour l'assistant : configuration commune et jeton de lecture Bitbucket."""
+        jeton = conf.secrets(self.dossier_config).get("BITBUCKET_HTTP_TOKEN", "")
+        return {**self.commun.acces, "BITBUCKET_HTTP_TOKEN": jeton}
+
+    def outils_doc(self) -> list:
+        """Documentation Odatio en lecture seule (aucun outil si elle n'est pas configurée)."""
+        if not doc_odatio.configuree(self.commun.acces):
+            return []
+        etat = {}
+
+        async def _appel(methode: str, *args) -> dict:
+            try:
+                if "doc" not in etat:
+                    etat["doc"] = doc_odatio.Documentation(self.variables_doc())
+                return _texte(await asyncio.to_thread(getattr(etat["doc"], methode), *args))
+            except doc_odatio.DocErreur as e:
+                return _texte(f"Documentation Odatio : {e}", True)
+
+        @tool("doc_sommaire", "Sommaire de la documentation Odatio (produit Standard, lue dans ses sources sur "
+              "Bitbucket) : sous-dossiers et fichiers d'un dossier ('' = racine) sur 'profondeur' niveaux (1 à 6).",
+              {"type": "object", "properties": {"dossier": {"type": "string"}, "profondeur": {"type": "integer"}}})
+        async def doc_sommaire(args):
+            return await _appel("sommaire", str(args.get("dossier") or ""), args.get("profondeur") or 2)
+
+        @tool("doc_lire", "Lit un fichier de la documentation Odatio, lignes numérotées : chemin donné par "
+              "doc_sommaire ou doc_chercher, ou adresse d'une page du site publié. 'debut' et 'nombre' (400 par "
+              "défaut, 800 au plus) pour paginer.",
+              {"type": "object", "properties": {"chemin": {"type": "string"}, "debut": {"type": "integer"},
+                                                "nombre": {"type": "integer"}}, "required": ["chemin"]})
+        async def doc_lire(args):
+            return await _appel("lire", str(args.get("chemin") or ""), args.get("debut") or 1,
+                                args.get("nombre") or 400)
+
+        @tool("doc_chercher", "Cherche un texte dans la documentation Odatio (plein texte si Bitbucket le permet, "
+              "sinon dans les noms de fichiers) : fichiers et extraits.",
+              {"type": "object", "properties": {"texte": {"type": "string"}, "nombre": {"type": "integer"}},
+               "required": ["texte"]})
+        async def doc_chercher(args):
+            return await _appel("chercher", str(args.get("texte") or ""), args.get("nombre") or 15)
+
+        return [doc_sommaire, doc_lire, doc_chercher]
 
     # --- options ------------------------------------------------------------------------------------------------
     def serveurs_agents(self) -> dict:

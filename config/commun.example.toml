@@ -10,6 +10,9 @@ JENKINS_URL = "https://jenkins.exemple.io"
 JENKINS_USER = "prenom.nom"
 GROUNDCOVER_API_URL = "https://api.groundcover.exemple"
 GROUNDCOVER_BACKEND_ID = "backend-exemple"
+ODATIO_DOC_DEPOT = "https://git.exemple.io/scm/doc/odatio-docs.git"   # sources de la doc, lues par l'API Bitbucket
+ODATIO_DOC_BRANCHE = "master"
+ODATIO_DOC_DOSSIER = "docs"
 
 # Relances du tableau de bord (facultatif) : seules les valeurs différentes des valeurs par défaut sont utiles.
 # Délais en jours ouvrés (lundi à vendredi) ; 0 désactive une règle à délai.
