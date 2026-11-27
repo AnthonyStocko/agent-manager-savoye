@@ -7,10 +7,18 @@ leur état dans une seule IHM, tient la configuration commune (accès, applicati
 | Agent | Port | Lancement |
 |---|---|---|
 | Manager | 8500 | `lancer.bat` |
-| Scrum Master (`agent-scrum-master`) | 8501 | avec le manager |
 | Agent fonctionnel Odatio (`agent-odatio`) | 8502 | avec le manager |
 | Outillage de développement (`agent-dev-tool-savoye`) | 8503 | à la demande, depuis l'onglet Agents |
+| Projets et connexions (`agent-projets`) | 8504 | avec le manager |
+| Intégration du besoin (`agent-integration`) | 8505 | avec le manager |
+| Lancement d'un ticket (`agent-lancement`) | 8506 | avec le manager |
+| Tests Cucumber (`agent-cucumber`) | 8507 | avec le manager |
+| Revue de PR (`agent-revue-pr`) | 8508 | avec le manager |
 | Rétrospective (`agent-retrospective`) | 8509 | avec le manager |
+
+Ancien agent-scrum-master (8501) : découpé entre ces agents puis supprimé. Leurs données partagées (`.env`, `.tmp`,
+cadrages, patchs) sont dans `AGENT_DATA_DIR` (`C:\agent-data`) ; ses réglages globaux se modifient dans
+Configuration › Réglages des agents.
 
 ## Installation (Windows)
 
@@ -46,7 +54,7 @@ Onglet **Assistant** : pose ta question au manager. Selon la règle de décision
 - **répond seul** à une question d'état général (agents en ligne, applications configurées) ou d'historique
   (« qu'est-ce qu'on a fait sur ODA-1234 ? » : il relit son journal sans réinterroger les agents) ;
 - **interroge** les agents en lecture seule pour une question rapide : état d'une analyse ou d'un ticket, génération
-  Cucumber ou build Jenkins en cours (Scrum Master), question fonctionnelle sur une application (Odatio, quelques
+  Cucumber ou build Jenkins en cours (données des agents), question fonctionnelle sur une application (Odatio, quelques
   minutes ; la conversation se poursuit ensuite dans Odatio) ;
 - **te redirige** vers le bon agent, avec un lien et un résumé, pour tout ce qui demande une validation, une
   écriture, un travail long ou le job Jenkins (cadrage, chiffrage, patch, tests Cucumber, fichier d'interface…), et
@@ -64,31 +72,29 @@ Onglet **Tableau de bord**, rafraîchi toutes les minutes, **sans appel au modè
   7 jours) : questions au manager et leur coût, redirections, analyses passées « à valider », patchs livrés, builds
   Cucumber terminés, pannes d'agents et erreurs, avec un lien vers le ticket. « Vu » le masque jusqu'au lendemain ;
   il ne s'affiche pas s'il n'y a rien de nouveau ;
-- **Alertes** : agent en échec ou injoignable, erreur récente, Scrum Master non consultable ; puis les **relances**
+- **Alertes** : agent en échec ou injoignable, erreur récente, données des agents non consultables ; puis les **relances**
   (🔔), de la plus urgente à la moins urgente : patch livré NON joint dans Jira, dernier build Cucumber en échec,
   génération Cucumber en cours depuis plus de 6 h, pièce jointe d'un patch non vérifiée depuis 1 jour ouvré, ticket
-  redirigé vers Scrum Master sans suite depuis 2 jours ouvrés, analyse à valider non publiée depuis 3 jours ouvrés,
+  redirigé vers Lancement sans suite depuis 2 jours ouvrés, analyse à valider non publiée depuis 3 jours ouvrés,
   proposition d'amélioration de la Rétrospective en attente depuis 3 jours ouvrés.
   Chacune a un lien vers l'agent concerné et un bouton « Ignorer » (masquée 7 jours, ou jusqu'à ce que la situation
   change). Seuils réglables dans Configuration › Relances ;
 - **Agents** : état résumé (le détail reste dans l'onglet Agents) ;
-- **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses de Scrum
-  Master), avec l'état de leur analyse et un bouton qui ouvre Scrum Master sur le ticket ;
-- **Analyses à valider** : analyses de Scrum Master pas encore publiées dans Jira (la validation se fait dans Scrum
-  Master) ;
-- **Jenkins / Cucumber** : verrou du job Cucumber (un seul à la fois, géré par Scrum Master), génération en cours
-  par client, derniers builds ;
+- **Tickets en cours** : tickets vus ces 7 derniers jours (questions au manager, redirections, analyses
+  d'agent-lancement), avec l'état de leur analyse et un bouton qui ouvre l'agent Lancement sur le ticket ;
+- **Analyses à valider** : analyses pas encore publiées dans Jira (la validation se fait dans l'agent Lancement) ;
+- **Jenkins / Cucumber** : verrou du job Cucumber (un seul à la fois, géré par l'agent Cucumber), génération en
+  cours par client, derniers builds ;
 - **Boucles de correction Cucumber** : quand des tests générés échouent à cause de l'agent Cucumber, celui-ci
   demande à l'outillage de développement de le corriger, puis rejoue les tests, sans validation de ta part. Le bloc
   affiche, pour information, l'état de chaque boucle (en cours, itération x/N, terminée, abandonnée), les corrections
   fusionnées et les retours arrière. Une relance n'apparaît que si la boucle s'arrête avec des échecs dus à l'agent
   non résolus (demande préremplie vers l'outillage de développement) ou des défauts de l'application ;
-- **Coûts** : questions au manager sur 7 et 30 jours, et consommation de Scrum Master par étape
-  (`.tmp/token_usage.csv` de l'agent) ;
-- **Patchs livrés** : patchs livrés par Scrum Master ces 7 derniers jours, d'après son registre local des livraisons
-  (outil `patchs`), avec l'état de la pièce jointe Jira (jointe, NON jointe, non vérifiée) et un bouton qui ouvre
-  Scrum Master sur le ticket. Un Scrum Master antérieur à ce registre affiche seulement une invitation à le mettre à
-  jour.
+- **Coûts** : questions au manager sur 7 et 30 jours, et consommation des agents par étape
+  (`.tmp/token_usage.csv` d'`AGENT_DATA_DIR`) ;
+- **Patchs livrés** : patchs livrés par l'agent Lancement ces 7 derniers jours, d'après le registre local des
+  livraisons (outil `patchs`), avec l'état de la pièce jointe Jira (jointe, NON jointe, non vérifiée) et un bouton
+  qui ouvre l'agent Lancement sur le ticket.
 - **Rétrospectives** : derniers tickets analysés par l'agent Rétrospective (patch d'agent-lancement comparé au code
   fusionné) avec leur score, et propositions d'amélioration d'agent-lancement en attente ; les boutons ouvrent
   l'agent Rétrospective, où se font la validation et l'envoi à l'outillage de développement.

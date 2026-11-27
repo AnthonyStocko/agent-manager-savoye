@@ -1,4 +1,4 @@
-"""CLI du manager : --step ask (assistant des agents, repris tel quel d'agent-scrum-master, qui y délègue)."""
+"""CLI du manager : --step ask (assistant des agents, repris tel quel de l'ancien agent-scrum-master, supprimé)."""
 import argparse
 import io
 import json
@@ -104,7 +104,7 @@ REVIEW_TOOLS = ["Read", "Grep", "Glob"]
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Agent Scrum Master - Cadrage, Patching & Cucumber")
+    parser = argparse.ArgumentParser(description="Manager Savoye - assistant des agents (--step ask)")
     parser.add_argument("--issue", default="", help="Clé du ticket Jira (ex: PROJ-123) ; inutile pour generate-cucumber-client")
     parser.add_argument("--project", default="", help="Clé du projet Jira (ex: PROJ) ; inutile pour generate-cucumber-client")
     parser.add_argument("--client-repo", default="", help="Chemin local ou URL du dépôt client")
@@ -190,7 +190,7 @@ INIT_REMAINING, INIT_UNVERIFIABLE = {}, {}
 
 
 if __name__ == "__main__":
-    # Fichiers lus par l'assistant (résultats .tmp, analyses) : dossier d'agent-scrum-master
+    # Fichiers lus par l'assistant (résultats .tmp, analyses) : AGENT_DATA_DIR
     os.chdir(DATA_DIR)
     # Étapes Cucumber (garde de livraison DeliveryBlocked comprise) : dans le processus d'agent-cucumber
     main()

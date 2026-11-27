@@ -17,12 +17,12 @@ decision = "repondre"
 [[cas]]
 question = "Où en est l'analyse du ticket ODA-1234 ? Est-elle publiée ?"
 decision = "interroger"
-agent = "scrum-master"
+agent = "donnees"
 
 [[cas]]
 question = "Est-ce qu'un job Cucumber tourne en ce moment sur Jenkins ?"
 decision = "interroger"
-agent = "scrum-master"
+agent = "donnees"
 
 [[cas]]
 question = "Sur client-x-recette, comment est calculée la date de préparation d'une commande ?"
@@ -32,7 +32,7 @@ agent = "odatio"
 [[cas]]
 question = "Lance les tests Cucumber du ticket ODA-1234."
 decision = "rediriger"
-agent = "scrum-master"
+agent = "cucumber"
 
 [[cas]]
 question = "Valide l'analyse de ODA-1234 et publie-la dans Jira."
@@ -61,7 +61,7 @@ decision = "repondre"
 [[cas]]
 question = "Quel score a eu la rétrospective de ODA-1234, et reste-t-il des propositions d'amélioration en attente ?"
 decision = "interroger"
-agent = "scrum-master"
+agent = "donnees"
 
 [[cas]]
 question = "Lance la rétrospective du ticket ODA-1234, il vient d'être fusionné."

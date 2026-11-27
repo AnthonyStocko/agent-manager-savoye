@@ -48,7 +48,7 @@ class Agent:
 
     @property
     def python(self) -> Path:
-        """Python du venv de l'agent : venv/ ou .venv/ (scrum-master), Windows sinon Linux / macOS."""
+        """Python du venv de l'agent : venv/ ou .venv/, Windows sinon Linux / macOS."""
         candidats = [self.dossier / v / "Scripts" / "python.exe" for v in ("venv", ".venv")] + \
                     [self.dossier / v / "bin" / "python" for v in ("venv", ".venv")]
         existant = next((c for c in candidats if c.exists()), None)
@@ -77,6 +77,31 @@ class Registre:
             if agent.nom == nom:
                 return agent
         raise RegistreErreur(f"agent inconnu : {nom}")
+
+
+# Lecteur des données des agents : serveur MCP en lecture seule du manager (mcp_lecture.py), lancé avec le venv du
+# manager dans AGENT_DATA_DIR. Ce n'est pas un agent du registre (ni IHM, ni lancement par le superviseur) : il
+# remplace le serveur MCP qu'agent-scrum-master (supprimé) portait pour le manager.
+NOM_LECTEUR = "donnees"
+DOMAINE_LECTEUR = """Données des agents, en lecture seule (AGENT_DATA_DIR) : état des analyses de tickets
+(agent-lancement), ticket Jira, clients Cucumber et builds Jenkins (agent-cucumber), patchs livrés, boucles de
+correction Cucumber, rétrospectives (agent-retrospective)."""
+SECRETS_LECTEUR = ("JIRA_API_TOKEN", "JIRA_READ_API_TOKEN", "JENKINS_API_TOKEN")
+
+
+def dossier_donnees() -> Path:
+    """AGENT_DATA_DIR : .env, .tmp et fichiers produits partagés par les agents (agent_socle.chemins)."""
+    from agent_socle.chemins import DATA_DIR
+    return Path(DATA_DIR)
+
+
+def lecteur(dossier: Path | None = None) -> Agent:
+    """Source « donnees » : lecteur MCP des données des agents (port 0 : aucune IHM). ``dossier`` : tests."""
+    venv = [RACINE / "venv" / "Scripts" / "python.exe", RACINE / "venv" / "bin" / "python"]
+    python = next((p for p in venv if p.exists()), Path(sys.executable))
+    return Agent(nom=NOM_LECTEUR, titre="Données des agents", dossier=Path(dossier or dossier_donnees()), port=0,
+                 mode="demande", commande=(), domaine=" ".join(DOMAINE_LECTEUR.split()),
+                 mcp=(str(python), str(RACINE / "mcp_lecture.py")), secrets=SECRETS_LECTEUR)
 
 
 def charger(fichier: Path = FICHIER) -> Registre:

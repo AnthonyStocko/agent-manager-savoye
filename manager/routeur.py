@@ -5,7 +5,9 @@ Outils, tous en LECTURE SEULE :
   (journal du manager, lot 6 : sans réinterroger les agents), rediriger, et doc_sommaire, doc_lire, doc_chercher
   (documentation Odatio lue dans Bitbucket, doc_odatio.py) quand ODATIO_DOC_DEPOT est configuré ;
 - serveurs MCP des agents, déclarés dans le registre (champ ``mcp``) et lancés avec leur venv et la configuration
-  commune qui leur revient (``configuration.variables_pour``, moindre privilège).
+  commune qui leur revient (``configuration.variables_pour``, moindre privilège) ;
+- source « donnees » du manager (``registre.lecteur()``, mcp_lecture.py) : données des agents en lecture seule
+  (analyses, Cucumber, builds, patchs, rétrospectives). Consultable, mais pas une cible de « rediriger ».
 Aucun outil intégré de Claude Code (ni Bash, ni Read, ni Edit) ; réglages et CLAUDE.md du poste ignorés.
 
 « rediriger » n'agit pas : il prépare un lien vers l'agent, affiché à l'utilisateur sous la réponse, prérempli
@@ -72,9 +74,10 @@ def _texte(texte: str, erreur: bool = False) -> dict:
 class Routeur:
     def __init__(self, registre: reg.Registre | None = None, dossier_config: Path = conf.DOSSIER,
                  utilisateur: str = "", simulation: bool = False, pilote: Pilote | None = None,
-                 journal: jr.Journal | None = None):
+                 journal: jr.Journal | None = None, lecteur: reg.Agent | None = None):
         """simulation : les appels aux agents sont refusés et seulement notés (évaluation de la règle de décision
-        sans faire travailler les agents)."""
+        sans faire travailler les agents). lecteur : source des données des agents (``registre.lecteur()`` par
+        défaut ; tests)."""
         self.registre = registre or reg.charger()
         self.dossier_config = dossier_config
         self.commun = conf.charger(dossier_config)
@@ -86,6 +89,14 @@ class Routeur:
         self.simules: list = []
         # agents réellement consultables : serveur MCP déclaré et exécutable présent
         self.agents = [a if self._mcp_disponible(a) else dataclasses.replace(a, mcp=()) for a in self.registre.agents]
+        # sources du manager consultables (lecteur des données), hors registre : jamais cibles de « rediriger »
+        if lecteur is None:
+            try:
+                lecteur = reg.lecteur()
+            except Exception:  # noqa: BLE001 — agent-socle absent : pas de lecteur, le reste fonctionne
+                lecteur = None
+        self.lecteur = lecteur
+        self.sources = [lecteur] if lecteur is not None and self._mcp_disponible(lecteur) else []
 
     @staticmethod
     def _mcp_disponible(agent: reg.Agent) -> bool:
@@ -121,10 +132,11 @@ class Routeur:
 
         @tool("historique_ticket", "Ce que le manager sait déjà d'un ticket Jira (ex. ODA-1234), sans interroger les "
               "agents : questions posées au manager et redirections (journal), dernier état connu de son analyse "
-              "chez Scrum Master (relevé par le tableau de bord, avec sa date) et coût cumulé connu.",
+              "dans agent-lancement (relevé par le tableau de bord, avec sa date) et coût cumulé connu.",
               {"type": "object", "properties": {"ticket": {"type": "string"}}, "required": ["ticket"]})
         async def historique_ticket(args):
-            return _texte(*historique(self.journal, self.registre, str(args.get("ticket") or "")))
+            return _texte(*historique(self.journal, self.registre, str(args.get("ticket") or ""),
+                                      dossier=self.lecteur.dossier if self.lecteur else None))
 
         onglets = "; ".join(f"{nom} : {', '.join(o)}" for nom, o in liens.ONGLETS.items() if nom in noms)
         @tool("rediriger", "Redirige l'utilisateur vers un agent pour une demande qu'il doit y faire lui-même "
@@ -132,7 +144,7 @@ class Routeur:
               f"l'agent prérempli ; il n'y lance rien. agent : un de {', '.join(noms)}. resume : ce qui est demandé "
               "et ce que tu sais déjà (2 à 5 phrases). onglet : page de l'agent à ouvrir "
               f"({onglets}). ticket : clé Jira si connue. projet : application si connue. question : question "
-              "prête à envoyer dans l'assistant de l'agent (odatio, scrum-master). conversation : identifiant de la "
+              "prête à envoyer dans l'assistant de l'agent (odatio). conversation : identifiant de la "
               "conversation enregistrée par l'agent Odatio, pour la reprendre. demande : texte prêt pour dev-tool "
               "(obligatoire pour dev-tool), et depot : agent à faire évoluer.",
               {"type": "object", "properties": {"agent": {"type": "string", "enum": noms},
@@ -218,7 +230,7 @@ class Routeur:
     # --- options ------------------------------------------------------------------------------------------------
     def serveurs_agents(self) -> dict:
         serveurs = {}
-        for a in self.agents:
+        for a in self.agents + self.sources:
             if not a.mcp:
                 continue
             commande = a.ligne_mcp()
@@ -239,7 +251,7 @@ class Routeur:
         DOSSIER_TRAVAIL.mkdir(parents=True, exist_ok=True)
         registre = dataclasses.replace(self.registre, agents=self.agents)
         return ClaudeAgentOptions(
-            system_prompt=consignes.construire(registre, self.commun, self.utilisateur),
+            system_prompt=consignes.construire(registre, self.commun, self.utilisateur, sources=self.sources),
             tools=[],                                 # aucun outil intégré : ni Bash, ni Read, ni Edit, ni Write
             allowed_tools=autorises,                  # autorisés sans confirmation
             permission_mode="dontAsk",                # tout le reste est refusé
@@ -286,8 +298,9 @@ class Routeur:
         return reponse
 
 
-def historique(journal: jr.Journal, registre: reg.Registre, cle: str) -> tuple[str, bool]:
-    """Texte de l'outil historique_ticket et indicateur d'erreur (lecture du journal, 0 token)."""
+def historique(journal: jr.Journal, registre: reg.Registre, cle: str, dossier: Path | None = None) -> tuple[str, bool]:
+    """Texte de l'outil historique_ticket et indicateur d'erreur (lecture du journal, 0 token). ``dossier`` :
+    AGENT_DATA_DIR du lecteur des données (coût des agents, token_usage.csv) ; par défaut, celui du socle."""
     try:
         vue = journal.ticket(cle)
     except jr.JournalErreur as e:
@@ -308,13 +321,13 @@ def historique(journal: jr.Journal, registre: reg.Registre, cle: str) -> tuple[s
                       + (f", onglet {onglet}" if onglet else "") + (f", projet {e.projet}" if e.projet else ""))
     if vue["analyse"]:
         a = vue["analyse"]
-        lignes.append(f"- Analyse chez Scrum Master (relevé du {a['vu_le'].replace('T', ' ')[:16]}) : {a['analyse']}"
+        lignes.append(f"- Analyse dans agent-lancement (relevé du {a['vu_le'].replace('T', ' ')[:16]}) : {a['analyse']}"
                       + (" — à valider" if a["a_valider"] else ""))
     else:
         lignes.append("- Aucun état d'analyse relevé par le tableau de bord.")
-    cout_agent = sources.cout_ticket_agent(registre, vue["cle"])
+    cout_agent = sources.cout_ticket_agent(registre, vue["cle"], dossier=dossier)
     lignes.append(f"- Coût connu : {vue['cout_manager_usd']:.3f} $ de questions au manager"
-                  + (f", {cout_agent:.3f} $ chez Scrum Master" if cout_agent is not None else ""))
+                  + (f", {cout_agent:.3f} $ chez les agents" if cout_agent is not None else ""))
     return "\n".join(lignes), False
 
 

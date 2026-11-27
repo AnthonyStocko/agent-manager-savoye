@@ -12,10 +12,13 @@ def agent(nom="odatio", port=8502, **autres):
 class TestRegistre(unittest.TestCase):
     def test_exemple_valide(self):
         registre = reg.charger(reg.EXEMPLE)
-        self.assertEqual([a.nom for a in registre.agents], ["scrum-master", "odatio", "dev-tool", "projets", "integration",
+        self.assertEqual([a.nom for a in registre.agents], ["odatio", "dev-tool", "projets", "integration",
                                                               "lancement", "cucumber", "revue-pr",
-                                                              "retrospective"])
-        self.assertEqual([a.port for a in registre.agents], [8501, 8502, 8503, 8504, 8505, 8506, 8507, 8508, 8509])
+                                                              "retrospective"])       # agent-scrum-master supprimé
+        self.assertEqual([a.port for a in registre.agents], [8502, 8503, 8504, 8505, 8506, 8507, 8508, 8509])
+        # chaque agent avec son propre venv (plus de venv partagé d'agent-scrum-master)
+        self.assertFalse([a.nom for a in registre.agents if "scrum" in " ".join(a.commande + a.mcp)])
+        self.assertEqual(registre.agent("lancement").commande, reg.COMMANDE_STREAMLIT)
         self.assertEqual(registre.agent("retrospective").secrets,
                          ("ANTHROPIC_API_KEY", "JIRA_READ_API_TOKEN", "BITBUCKET_HTTP_TOKEN"))   # aucun jeton d'écriture
         self.assertEqual(registre.agent("dev-tool").mode, "demande")

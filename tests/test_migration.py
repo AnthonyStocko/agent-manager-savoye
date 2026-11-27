@@ -45,10 +45,11 @@ class TestMigration(unittest.TestCase):
         self.addCleanup(temporaire.cleanup)
         racine = Path(temporaire.name)
         self.config = racine / "manager" / "config"
-        dossiers = {nom: racine / nom for nom in ("agent-scrum-master", "agent-odatio", "agent-dev-tool")}
+        # agent-data : .env partagé d'AGENT_DATA_DIR (source « donnees », lu en premier)
+        dossiers = {nom: racine / nom for nom in ("agent-data", "agent-odatio", "agent-dev-tool")}
         for d in dossiers.values():
             d.mkdir()
-        (dossiers["agent-scrum-master"] / ".env").write_text(
+        (dossiers["agent-data"] / ".env").write_text(
             "JIRA_DOMAIN=societe.atlassian.net\nJIRA_EMAIL=moi@societe.com\nJIRA_API_TOKEN=jeton-scrum-1234\n"
             "BITBUCKET_WRITE_TOKEN=ecriture-5678\nCUCUMBER_BATCH_SIZE=3\n", encoding="utf-8")
         (dossiers["agent-odatio"] / ".env").write_text(
@@ -57,13 +58,14 @@ class TestMigration(unittest.TestCase):
         (dossiers["agent-odatio"] / "profils.toml").write_text(PROFILS, encoding="utf-8")
         self.registre = reg.lire({"agents": [
             {"nom": "odatio", "dossier": str(dossiers["agent-odatio"]), "port": 8502},
-            {"nom": "scrum-master", "dossier": str(dossiers["agent-scrum-master"]), "port": 8501},
             {"nom": "dev-tool", "dossier": str(dossiers["agent-dev-tool"]), "port": 8503}]})
+        self.donnees = reg.lecteur(dossiers["agent-data"])
 
     def test_proposition(self):
-        p = migration.proposer(self.registre)
+        p = migration.proposer(self.registre, self.donnees)
         self.assertEqual(p.acces, {"JIRA_DOMAIN": "societe.atlassian.net", "JIRA_EMAIL": "moi@societe.com"})
-        self.assertEqual(p.secrets["JIRA_API_TOKEN"], "jeton-scrum-1234")          # scrum-master d'abord
+        self.assertEqual(p.secrets["JIRA_API_TOKEN"], "jeton-scrum-1234")          # .env partagé d'abord
+        self.assertEqual(p.origines["JIRA_API_TOKEN"], reg.NOM_LECTEUR)
         self.assertEqual(p.secrets["BITBUCKET_WRITE_TOKEN"], "ecriture-5678")
         self.assertNotIn("CUCUMBER_BATCH_SIZE", p.acces)                            # réglage propre, non importé
         self.assertEqual(len(p.conflits), 1)
@@ -82,7 +84,7 @@ class TestMigration(unittest.TestCase):
         conf.enregistrer(conf.Commun(acces={"JIRA_EMAIL": "deja@societe.com"},
                                      applications=[conf.Application(nom="local", description="gardée")]), self.config)
         conf.enregistrer_secrets({"JIRA_API_TOKEN": "deja-present"}, self.config)
-        gardes = migration.appliquer(migration.proposer(self.registre), self.config)
+        gardes = migration.appliquer(migration.proposer(self.registre, self.donnees), self.config)
         commun = conf.charger(self.config)
         self.assertEqual(commun.acces["JIRA_EMAIL"], "deja@societe.com")
         self.assertEqual(commun.acces["JIRA_DOMAIN"], "societe.atlassian.net")
@@ -94,7 +96,7 @@ class TestMigration(unittest.TestCase):
         self.assertTrue(any("local" in g for g in gardes))
         self.assertNotIn("mdp", (self.config / conf.FICHIER).read_text(encoding="utf-8"))
         # les fichiers des agents ne sont pas modifiés
-        self.assertIn("CUCUMBER_BATCH_SIZE", (self.registre.agent("scrum-master").dossier / ".env").read_text())
+        self.assertIn("CUCUMBER_BATCH_SIZE", (self.donnees.dossier / ".env").read_text())
 
 
 if __name__ == "__main__":

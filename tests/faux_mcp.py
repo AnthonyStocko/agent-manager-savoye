@@ -1,6 +1,6 @@
-"""Faux serveur MCP (stdio) de scrum-master pour les tests : mêmes outils, textes au format de
-tools/lecture_manager.py, données fictives. Mode « erreur » en argument : l'outil cucumber renvoie une erreur ;
-mode « ancien » : pas d'outil patchs (scrum-master antérieur au registre des livraisons)."""
+"""Faux lecteur MCP (stdio) des données des agents (source « donnees ») pour les tests : mêmes outils, textes au
+format de manager/lecture_manager.py, données fictives. Mode « erreur » en argument : l'outil cucumber renvoie une erreur ;
+mode « ancien » : pas d'outil patchs (lecteur antérieur au registre des livraisons)."""
 
 import sys
 
@@ -11,12 +11,12 @@ except ImportError:  # pragma: no cover — mcp 1.x
 
 ERREUR = "erreur" in sys.argv[1:]
 ANCIEN = "ancien" in sys.argv[1:]
-serveur = Serveur("scrum-master")
+serveur = Serveur("donnees")
 
 
 @serveur.tool(description="analyses")
 def analyses() -> str:
-    return ("Analyses de l'agent Scrum Master :\n"
+    return ("Analyses (agent-lancement) :\n"
             "- ODA-1 (modifiée le 2026-11-19 10:00) : Analyse non publiée (brouillon) ← à valider\n"
             "- ODA-2 (modifiée le 2026-11-18 09:30) : Publiée dans Jira le 2026-11-18 à 09:45")
 
@@ -25,17 +25,17 @@ def analyses() -> str:
 def cucumber() -> str:
     if ERREUR:
         return "ERREUR : Cucumber illisible"
-    return ("Cucumber dans l'agent Scrum Master :\n- client-x : aucune génération en cours\n"
+    return ("Cucumber (agent-cucumber) :\n- client-x : aucune génération en cours\n"
             "Aucun job Jenkins configuré.")
 
 
 @serveur.tool(description="builds")
 def builds_jenkins(job: str = "", nombre: int = 5) -> str:
-    return "Aucun job Jenkins configuré dans l'agent Scrum Master."
+    return "Aucun job Jenkins configuré dans le .env des agents."
 
 
 def patchs(jours: int = 7) -> str:
-    return (f"Patchs livrés ces {jours} derniers jours (agent Scrum Master) :\n"
+    return (f"Patchs livrés ces {jours} derniers jours (agent-lancement) :\n"
             "- ODA-2 (livré le 2026-11-19 16:00) : ODA-2-standard.patch — en pièce jointe Jira")
 
 

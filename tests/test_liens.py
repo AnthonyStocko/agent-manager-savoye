@@ -19,9 +19,11 @@ class TestLiens(unittest.TestCase):
                                        "contexte": "Lancer les tests Cucumber du ticket."})
 
     def test_redirection_sans_agent_au_registre(self):
-        """Agent cible absent du registre : agent-scrum-master, qui renvoie lui-même vers l'agent."""
+        """Ancien lien vers agent-scrum-master (supprimé), agent cible absent du registre : adresse inchangée,
+        onglet retiré (scrum-master n'a plus d'onglets connus)."""
         url = liens.construire("scrum-master", "http://localhost:8501", urls={}, page="lancement", ticket="ODA-3")
-        self.assertTrue(url.startswith("http://localhost:8501/?source=manager&page=lancement"))
+        self.assertEqual(url, "http://localhost:8501/?source=manager&ticket=ODA-3")
+        self.assertNotIn("scrum-master", liens.ONGLETS)
         self.assertEqual(liens.rediriger("scrum-master", "u", "revue", {"revue-pr": "http://localhost:8508"}),
                          ("revue-pr", "http://localhost:8508", ""))
 

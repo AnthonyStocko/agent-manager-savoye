@@ -1,4 +1,5 @@
-"""Onglet Configuration du manager : accès communs, applications Odatio, import des réglages des agents, registre."""
+"""Onglet Configuration du manager : accès communs, applications Odatio, réglages des agents (.env partagé
+d'AGENT_DATA_DIR, repris d'agent-scrum-master), import des réglages des agents, registre."""
 
 from __future__ import annotations
 
@@ -20,12 +21,19 @@ def afficher() -> None:
     except conf.ConfigurationErreur as e:
         st.error(f"{e}\n\nCorrige `{conf.DOSSIER / conf.FICHIER}` à la main.")
         return
-    acces, applications, relances, importer, registre = st.tabs(["Accès", "Applications", "Relances", "Import",
-                                                                 "Registre des agents"])
+    acces, applications, reglages, relances, importer, registre = st.tabs(
+        ["Accès", "Applications", "Réglages des agents", "Relances", "Import", "Registre des agents"])
     with acces:
         _acces(commun)
     with applications:
         _applications(commun)
+    with reglages:
+        try:
+            from manager import ihm_reglages      # agent-socle requis (installé dans le venv du manager)
+        except ImportError as e:
+            st.error(f"Réglages des agents indisponibles : {e}")
+        else:
+            ihm_reglages.afficher()
     with relances:
         _relances(commun)
     with importer:
@@ -36,7 +44,7 @@ def afficher() -> None:
 
 SEUILS = {   # libellé et aide de chaque seuil de conf.RELANCES
     "analyse_a_valider_jours": ("Analyse à valider non publiée (jours ouvrés)", "0 : règle désactivée."),
-    "redirection_sans_suite_jours": ("Ticket redirigé vers Scrum Master sans suite (jours ouvrés)",
+    "redirection_sans_suite_jours": ("Ticket redirigé vers Lancement sans suite (jours ouvrés)",
                                      "Analyse non modifiée depuis la redirection. 0 : règle désactivée."),
     "patch_non_verifie_jours": ("Pièce jointe d'un patch non vérifiée (jours ouvrés)", "0 : règle désactivée."),
     "generation_bloquee_heures": ("Génération Cucumber en cours (heures)", "0 : règle désactivée."),

@@ -32,7 +32,7 @@ _DOSSIER = tempfile.TemporaryDirectory()
 
 def registre():
     return reg.lire({"agents": [
-        {"nom": "scrum-master", "titre": "Scrum Master", "dossier": ".", "port": 8501},
+        {"nom": "lancement", "titre": "Lancement", "dossier": ".", "port": 8506},
         {"nom": "cucumber", "titre": "Tests Cucumber", "dossier": ".", "port": 8507},
         {"nom": "dev-tool", "titre": "Outillage", "dossier": ".", "port": 8503, "mode": "demande"}]})
 
@@ -59,12 +59,13 @@ class TestBoucles(unittest.TestCase):
         self.assertEqual(x["annulations"], ["it2 abc1234567 → def7654321"])
         self.assertIn("\n- [AGENT]", x["demande"])
         self.assertEqual(sources.lire_boucles("Aucune boucle de correction Cucumber."), [])
-        self.assertIn("boucles_cucumber", sources.LISTE_BLANCHE["scrum-master"])
+        self.assertIn("boucles_cucumber", sources.LISTE_BLANCHE[reg.NOM_LECTEUR])
 
     def construire(self, textes, erreurs=None):
         return tableau.construire(registre(), FauxJournal(), FauxPilote(),
                                   appeler_mcp=lambda agent, appels: FauxResultat(textes, erreurs),
-                                  lire_csv=lambda *a: [], maintenant=datetime(2026, 11, 20, 9, 0))
+                                  lire_csv=lambda *a: [], maintenant=datetime(2026, 11, 20, 9, 0),
+                                  lecteur=reg.lecteur(Path(_DOSSIER.name)))
 
     def test_bloc_et_liens_prerempli(self):
         t = self.construire({"boucles_cucumber": BOUCLES})

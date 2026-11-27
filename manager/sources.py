@@ -6,13 +6,14 @@
   Seuls les outils de LISTE_BLANCHE sont appelables (jamais ``question`` d'odatio, qui appelle le modèle).
 - Fichiers locaux des agents, lus sans les modifier (formats ci-dessous).
 
-Formats lus (contrat avec scrum-master ; un format inattendu donne une liste vide, jamais une exception) :
+Formats lus (contrat avec le lecteur des données des agents, ``mcp_lecture.py`` du manager, source
+``registre.NOM_LECTEUR`` ; un format inattendu donne une liste vide, jamais une exception) :
 - outil ``analyses`` (tools/lecture_manager.py) : une ligne par analyse
   ``- <CLE> (modifiée le AAAA-MM-JJ HH:MM) : <libellé>[ ← à valider]`` ;
 - outil ``cucumber`` : ``- <client> : <génération en cours (processus …, lancée le …)|aucune génération en cours>``,
   puis ``Jobs Jenkins : NOM = valeur, …`` ;
 - outil ``builds_jenkins`` : ``<job> :`` puis ``  #<n> <RÉSULTAT|EN COURS> — <début>, <durée> min`` ;
-- outil ``patchs`` (registre local des livraisons, agent-scrum-master#49) : une ligne par livraison
+- outil ``patchs`` (registre local des livraisons de l'étape patch) : une ligne par livraison
   ``- <CLE> (livré le AAAA-MM-JJ HH:MM) : <fichier.patch>[, …] — <état>``, état ``en pièce jointe Jira``,
   ``NON joint dans Jira : <fichiers>`` ou ``pièce jointe non vérifiée (<raison>)`` ;
 - outil ``boucles_cucumber`` (boucles de correction autonome d'agent-cucumber, lecture_manager.boucles) : par boucle
@@ -24,7 +25,7 @@ Formats lus (contrat avec scrum-master ; un format inattendu donne une liste vid
   ``- <CLE> (le AAAA-MM-JJ HH:MM) : score <n>/100 · ajusté <n|—>/100 · écarts expliqués <k> · analyse <ok|indisponible>``,
   puis ``Propositions en attente :`` et ``- <id> [<levier>] : <libellé> · tickets <k> · en attente depuis
   AAAA-MM-JJ HH:MM`` (« - aucune » si la liste est vide) ;
-- fichier ``<dossier scrum-master>/.tmp/token_usage.csv`` (main.py, TOKEN_USAGE_FIELDS) : séparateur « ; »,
+- fichier ``<AGENT_DATA_DIR>/.tmp/token_usage.csv`` (CLI des agents, TOKEN_USAGE_FIELDS) : séparateur « ; »,
   en-tête, colonnes lues ``date`` (ISO), ``ticket``, ``etape``, ``cout_usd`` (point ou virgule décimale).
 """
 
@@ -43,8 +44,8 @@ from manager import registre as reg
 
 DELAI_MCP_S = 30.0
 LISTE_BLANCHE = {
-    "scrum-master": ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs", "boucles_cucumber",
-                     "retrospectives"),
+    reg.NOM_LECTEUR: ("analyses", "analyse", "ticket", "cucumber", "builds_jenkins", "patchs", "boucles_cucumber",
+                      "retrospectives"),
     "odatio": ("projets",),
 }
 TOKEN_USAGE = Path(".tmp") / "token_usage.csv"
@@ -123,7 +124,7 @@ _BUILD = re.compile(r"^\s+#(?P<numero>\d+) (?P<resultat>.+?) — (?P<debut>.+?),
 
 
 def lire_analyses(texte: str) -> list[dict]:
-    """[{cle, modifiee, libelle, a_valider}] depuis l'outil ``analyses`` de scrum-master."""
+    """[{cle, modifiee, libelle, a_valider}] depuis l'outil ``analyses`` du lecteur des données."""
     analyses = []
     for ligne in (texte or "").splitlines():
         m = _ANALYSE.match(ligne.strip())
@@ -167,8 +168,8 @@ def lire_builds(texte: str) -> list[dict]:
 
 
 def lire_patchs(texte: str) -> list[dict]:
-    """[{cle, livre_le, fichiers, statut, manquants, raison}] depuis l'outil ``patchs`` de scrum-master ; ``statut`` :
-    ``jointe`` (patch en pièce jointe du ticket Jira), ``non_jointe`` (``manquants`` : fichiers absents de Jira),
+    """[{cle, livre_le, fichiers, statut, manquants, raison}] depuis l'outil ``patchs`` du lecteur des données ;
+    ``statut`` : ``jointe`` (patch en pièce jointe du ticket Jira), ``non_jointe`` (``manquants`` : fichiers absents de Jira),
     ``non_verifiee`` (Jira non lu : ``raison``). Une ligne d'état inconnu est gardée en ``non_verifiee``."""
     patchs = []
     for ligne in (texte or "").splitlines():
@@ -199,7 +200,8 @@ def _nombre(valeur) -> float:
 
 
 def lire_token_usage(dossier_agent: Path, depuis: str = "", ticket: str = "") -> list[dict] | None:
-    """Lignes de ``.tmp/token_usage.csv`` de scrum-master : [{date, ticket, etape, cout_usd}], en lecture seule.
+    """Lignes de ``.tmp/token_usage.csv`` des agents (AGENT_DATA_DIR) : [{date, ticket, etape, cout_usd}], en lecture
+    seule.
     None si le fichier n'existe pas (coût inconnu, pas nul) ; SourceErreur s'il est illisible."""
     chemin = Path(dossier_agent) / TOKEN_USAGE
     if not chemin.exists():
@@ -231,11 +233,12 @@ def couts_par_etape(lignes: list[dict]) -> list[dict]:
                   key=lambda e: e["cout_usd"], reverse=True)
 
 
-def cout_ticket_agent(registre: reg.Registre, cle: str, agent: str = "scrum-master") -> float | None:
-    """Coût cumulé connu d'un ticket chez scrum-master (token_usage.csv) ; None si la source est absente."""
+def cout_ticket_agent(registre: reg.Registre, cle: str, dossier: Path | None = None) -> float | None:
+    """Coût cumulé connu d'un ticket chez les agents (token_usage.csv d'AGENT_DATA_DIR, ou ``dossier``) ; None si la
+    source est absente. ``registre`` : gardé pour les appelants."""
     try:
-        lignes = lire_token_usage(registre.agent(agent).dossier, ticket=cle)
-    except (reg.RegistreErreur, SourceErreur):
+        lignes = lire_token_usage(dossier or reg.dossier_donnees(), ticket=cle)
+    except SourceErreur:
         return None
     return None if lignes is None else round(sum(l["cout_usd"] for l in lignes), 4)
 

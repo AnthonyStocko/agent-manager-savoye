@@ -85,7 +85,7 @@ def test_patchs_livres(tmp_path):
     livraisons.noter("ODA-4", ["ODA-4-std.patch"], {"ODA-4-std.patch"}, quand=maintenant - timedelta(days=20),
                      chemin=registre)
     lignes = lecture.patchs(7, registre).splitlines()
-    assert lignes[0] == "Patchs livrés ces 7 derniers jours (agent Scrum Master) :"
+    assert lignes[0] == "Patchs livrés ces 7 derniers jours (agent-lancement) :"
     assert lignes[1].startswith("- ODA-3 (livré le ") and lignes[1].endswith(
         ": ODA-3-std.patch — pièce jointe non vérifiée (Jira illisible (Timeout))")
     assert lignes[2].endswith(": ODA-2-std.patch, ODA-2-client-x.patch — NON joint dans Jira : ODA-2-client-x.patch")
