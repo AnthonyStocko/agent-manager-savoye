@@ -2,7 +2,8 @@
 Serveur d'écoute des webhooks Bitbucket (Data Center / Server) post-merge.
 
 À chaque merge de Pull Request (ou push sur une branche cible), il extrait le ticket Jira source
-et lance `main.py --step generate-cucumber-postmerge`, qui crée le ticket SPEC [CUCUMBER] et y attache le patch.
+et lance `main.py --step generate-cucumber-postmerge` d'agent-cucumber (AGENT_CUCUMBER_DIR), qui crée le ticket
+SPEC [CUCUMBER] et y attache le patch.
 
 Deux modes :
   python webhook_server.py            Webhook : Bitbucket appelle http://<hôte>:<port>/webhook/bitbucket
@@ -48,6 +49,19 @@ sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
 WORKSPACE_DIR = DATA_DIR  # données (.tmp, fichiers produits) : AGENT_DATA_DIR
 load_dotenv(os.path.join(WORKSPACE_DIR, ".env"))
+# Étape post-merge : CLI d'agent-cucumber (AGENT_CUCUMBER_DIR, défaut : dossier voisin du manager), lancée avec son
+# venv. Avant la suppression d'agent-scrum-master, son main.py (dossier de données) déléguait à agent-cucumber.
+CUCUMBER_DIR = os.getenv("AGENT_CUCUMBER_DIR", "").strip() or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agent-cucumber")
+
+
+def cucumber_python() -> str:
+    """Python du venv d'agent-cucumber (à défaut, celui qui exécute ce serveur)."""
+    for candidat in (os.path.join(CUCUMBER_DIR, "venv", "Scripts", "python.exe"),
+                     os.path.join(CUCUMBER_DIR, "venv", "bin", "python")):
+        if os.path.exists(candidat):
+            return candidat
+    return sys.executable
 
 WEBHOOK_DIR = os.path.join(WORKSPACE_DIR, ".tmp", "webhook")
 PROCESSED_FILE = os.path.join(WEBHOOK_DIR, "processed.json")
@@ -204,7 +218,7 @@ def build_main_command(job: dict) -> list:
     is_std = job["bb_project"].upper() == _std_project_key()
     client_repo = "STD_ONLY" if is_std else f"{BITBUCKET_URL}/projects/{job['bb_project']}"
     cmd = [
-        sys.executable, os.path.join(WORKSPACE_DIR, "main.py"),
+        cucumber_python(), os.path.join(CUCUMBER_DIR, "main.py"),
         "--step", "generate-cucumber-postmerge",
         "--issue", source,
         "--project", jira_project,
@@ -271,7 +285,7 @@ def worker() -> None:
 # ---------------------------------------------------------------------------
 
 class WebhookHandler(BaseHTTPRequestHandler):
-    server_version = "AgentScrumMasterWebhook/1.0"
+    server_version = "AgentsSavoyeWebhook/1.0"
 
     def _reply(self, status: int, body: dict) -> None:
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -494,7 +508,7 @@ def run_poll(interval: int, since: str, from_now: bool = False) -> None:
 def main() -> None:
     import argparse
 
-    parser = argparse.ArgumentParser(description="Déclenchement post-merge de l'Agent Scrum Master")
+    parser = argparse.ArgumentParser(description="Déclenchement post-merge des tests Cucumber (agent-cucumber)")
     parser.add_argument("--poll", action="store_true", help="Interroger l'API Bitbucket au lieu d'attendre un webhook")
     parser.add_argument("--interval", type=int, default=int(os.getenv("POLL_INTERVAL_SECONDS", "300")))
     parser.add_argument("--since", default="", help="Rattrapage : date ISO, ex. '2026-10-01 14:00'")

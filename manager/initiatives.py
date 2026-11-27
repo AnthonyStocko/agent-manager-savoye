@@ -95,7 +95,7 @@ def point_du_matin(journal: jr.Journal, t: tb.Tableau, maintenant: datetime | No
             texte += " ; redirections : " + ", ".join(f"{a or '?'} {n}" for a, n in bilan["redirections"].items())
         rubriques.append(_rubrique("Échanges avec le manager", [{"texte": texte, "lien": ""}]))
 
-    # analyses passées « à valider » (dernier relevé de scrum-master)
+    # analyses passées « à valider » (dernier relevé du lecteur des données)
     analyses = [{"texte": f"{a['cle']} · {a['analyse']} (modifiée le {a['modifiee'].replace('T', ' ')[:16]})",
                  "lien": liens.get(a["cle"], "")} for a in bilan["analyses_a_valider"]]
     if analyses:
@@ -173,8 +173,13 @@ def _jour(d: datetime) -> str:
     return d.strftime("%Y-%m-%d %H:%M")
 
 
-def _url_scrum(t: tb.Tableau) -> str:
-    return next((a.get("url", "") for a in t.agents.lignes if a.get("nom") == tb.SCRUM), "")
+def _url(t: tb.Tableau, nom: str) -> str:
+    return next((a.get("url", "") for a in t.agents.lignes if a.get("nom") == nom), "")
+
+
+# Redirections suivies par « sans suite » : vers agent-lancement, et celles du journal faites vers l'ancien
+# agent-scrum-master (supprimé), qui portait alors l'onglet Lancement
+REDIRIGES = (tb.LANCEMENT, "scrum-master")
 
 
 def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
@@ -182,11 +187,13 @@ def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
     """Toutes les relances actives, ignorées comprises. Ne lève pas : une source illisible ne donne rien."""
     s = {**conf.RELANCES, **(seuils or {})}
     maintenant = maintenant or datetime.now()
-    url, liens = _url_scrum(t), _liens(t)
+    urls, liens = {nom: _url(t, nom) for nom in (tb.LANCEMENT, tb.CUCUMBER)}, _liens(t)
 
-    def lien(cle: str = "", page: str = "lancement") -> str:
-        if url:
-            return lk.construire(tb.SCRUM, url, page=page, ticket=cle)
+    def lien(cle: str = "", page: str = "") -> str:
+        """Ticket : agent-lancement ; page « cucumber » : agent-cucumber."""
+        agent = tb.CUCUMBER if page == "cucumber" else tb.LANCEMENT
+        if urls[agent]:
+            return lk.construire(agent, urls[agent], page=page, ticket=cle)
         return liens.get(cle, "") if cle else ""
 
     relances = []
@@ -198,19 +205,19 @@ def regles(journal: jr.Journal, t: tb.Tableau, seuils: dict | None = None,
                                     f"{a['cle']} : analyse à valider depuis le {_jour(debut)}, non publiée dans Jira",
                                     a.get("lien") or lien(a["cle"])))
 
-    # ticket redirigé vers scrum-master, analyse non modifiée depuis
+    # ticket redirigé vers agent-lancement, analyse non modifiée depuis
     if s["redirection_sans_suite_jours"] > 0:
         try:
             depuis = (maintenant - timedelta(days=REDIRECTIONS_JOURS)).isoformat(timespec="seconds")
             vues = {}
             for e in journal.evenements(depuis=depuis, types=("redirection",), limite=500):
-                if e.agent == tb.SCRUM and e.ticket and e.ticket not in vues:
+                if e.agent in REDIRIGES and e.ticket and e.ticket not in vues:
                     vues[e.ticket] = e.horodatage                        # la plus récente par ticket
             for cle, quand in vues.items():
                 debut = _echu(quand, s["redirection_sans_suite_jours"], maintenant)
                 if debut and journal.ticket(cle)["analyse"].get("analyse_modifiee", "") < quand:
                     relances.append(Relance("redirection_sans_suite_jours", f"redirection:{cle}:{quand}",
-                                            f"{cle} : redirigé vers Scrum Master le {_jour(debut)}, analyse non "
+                                            f"{cle} : redirigé vers Lancement le {_jour(debut)}, analyse non "
                                             "modifiée depuis", lien(cle)))
         except jr.JournalErreur:
             pass

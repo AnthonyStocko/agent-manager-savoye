@@ -48,7 +48,7 @@ ACCES = (
     Acces("JIRA_EMAIL", "E-mail", "Jira"),
     Acces("JIRA_API_TOKEN", "Jeton API", "Jira", secret=True),
     Acces("JIRA_READ_EMAIL", "E-mail du compte de lecture", "Jira",
-          aide="facultatif : utilisé par scrum-master pendant les étapes qui ne doivent pas écrire dans Jira"),
+          aide="facultatif : utilisé par les agents pendant les étapes qui ne doivent pas écrire dans Jira"),
     Acces("JIRA_READ_API_TOKEN", "Jeton du compte de lecture", "Jira", secret=True),
     Acces("BITBUCKET_URL", "Adresse", "Bitbucket", aide="ex. https://git.exemple.io"),
     Acces("BITBUCKET_HTTP_TOKEN", "Jeton de lecture", "Bitbucket", secret=True),
@@ -73,7 +73,7 @@ SECRETS = tuple(a.variable for a in ACCES if a.secret)
 # Délais en jours ouvrés (lundi à vendredi) ; 0 désactive une règle à délai.
 RELANCES = {
     "analyse_a_valider_jours": 3,         # analyse à valider non publiée
-    "redirection_sans_suite_jours": 2,    # ticket redirigé vers scrum-master, analyse non modifiée depuis
+    "redirection_sans_suite_jours": 2,    # ticket redirigé vers lancement, analyse non modifiée depuis
     "patch_non_verifie_jours": 1,         # pièce jointe d'un patch livré non vérifiée (Jira illisible)
     "generation_bloquee_heures": 6,       # génération Cucumber en cours (heures)
     "patch_non_joint": True,              # patch livré NON joint dans Jira (immédiat)

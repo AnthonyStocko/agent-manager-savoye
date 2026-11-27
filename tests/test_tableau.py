@@ -1,8 +1,10 @@
+import dataclasses
 import sys
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 from manager import initiatives
 from manager import journal as jr
@@ -15,20 +17,20 @@ from manager.pilote import PiloteErreur
 FAUX_MCP = Path(__file__).resolve().parent / "faux_mcp.py"
 MAINTENANT = datetime(2026, 11, 20, 9, 0)
 
-ANALYSES = ("Analyses de l'agent Scrum Master :\n"
+ANALYSES = ("Analyses (agent-lancement) :\n"
             "- ODA-1 (modifiée le 2026-11-19 10:00) : Analyse non publiée (brouillon) ← à valider\n"
             "- ODA-2 (modifiée le 2026-11-18 09:30) : Publiée dans Jira le 2026-11-18 à 09:45\n"
             "- ODA-3 (modifiée le 2026-11-17 08:00) : Analyse non publiée (brouillon) : révisée depuis sa "
             "publication du 2026-11-16 à 10:00 ← à valider\n"
             "… 2 analyse(s) plus ancienne(s)")
-CUCUMBER = ("Cucumber dans l'agent Scrum Master :\n"
+CUCUMBER = ("Cucumber (agent-cucumber) :\n"
             "- client-x : génération en cours (processus 4242, lancée le 2026-11-20T01:00:00 : "
             "generate-cucumber-client)\n"
             "- client-y : aucune génération en cours\n"
             "Jobs Jenkins : JENKINS_CUCUMBER_JOB = CUCUMBER-RUN, CUCUMBER_VERIFY_JOB = CUCUMBER-VERIFY")
 BUILDS = ("CUCUMBER-RUN :\n  #12 EN COURS — 2026-11-20 08:40, 20 min\n  #11 SUCCESS — 2026-11-19 17:00, 35 min\n"
           "CUCUMBER-VERIFY :\n  (aucun build lisible)")
-PATCHS = ("Patchs livrés ces 7 derniers jours (agent Scrum Master) :\n"
+PATCHS = ("Patchs livrés ces 7 derniers jours (agent-lancement) :\n"
           "- ODA-2 (livré le 2026-11-19 16:00) : ODA-2-standard.patch, ODA-2-specifique.patch — en pièce jointe Jira\n"
           "- ODA-4 (livré le 2026-11-18 11:05) : ODA-4-standard.patch, ODA-4-specifique.patch — NON joint dans "
           "Jira : ODA-4-specifique.patch\n"
@@ -52,16 +54,21 @@ class FauxPilote:
         if self.erreur:
             raise PiloteErreur("superviseur introuvable : lance le manager avec lancer.bat")
         return self.etats if self.etats is not None else [
-            {"nom": "scrum-master", "titre": "Scrum Master", "etat": sup.EN_LIGNE, "message": "", "url": "u"},
+            {"nom": "lancement", "titre": "Lancement", "etat": sup.EN_LIGNE, "message": "", "url": "u"},
             {"nom": "odatio", "titre": "Odatio", "etat": sup.ECHEC, "message": "arrêté 3 fois", "url": "u"}]
 
 
 def registre(dossier: Path) -> reg.Registre:
     return reg.lire({"agents": [
-        {"nom": "scrum-master", "titre": "Scrum Master", "dossier": str(dossier), "port": 8501,
-         "mcp": [sys.executable, str(FAUX_MCP)]},
         {"nom": "odatio", "titre": "Odatio", "dossier": str(dossier), "port": 8502},
+        {"nom": "lancement", "titre": "Lancement", "dossier": str(dossier), "port": 8506},
+        {"nom": "cucumber", "titre": "Cucumber", "dossier": str(dossier), "port": 8507},
         {"nom": "retrospective", "titre": "Rétrospective", "dossier": str(dossier), "port": 8509}]})
+
+
+def lecteur(dossier: Path, *args) -> reg.Agent:
+    """Source « donnees » servie par le faux lecteur MCP (hors registre, comme registre.lecteur())."""
+    return dataclasses.replace(reg.lecteur(dossier), mcp=(sys.executable, str(FAUX_MCP), *args))
 
 
 class TestLectures(unittest.TestCase):
@@ -70,7 +77,7 @@ class TestLectures(unittest.TestCase):
         self.assertEqual([(a["cle"], a["a_valider"]) for a in analyses],
                          [("ODA-1", True), ("ODA-2", False), ("ODA-3", True)])
         self.assertEqual(analyses[1]["libelle"], "Publiée dans Jira le 2026-11-18 à 09:45")
-        self.assertEqual(sources.lire_analyses("Aucune analyse dans l'agent Scrum Master."), [])
+        self.assertEqual(sources.lire_analyses("Aucune analyse dans les données des agents (agent-lancement)."), [])
 
     def test_cucumber_et_builds(self):
         c = sources.lire_cucumber(CUCUMBER)
@@ -90,7 +97,7 @@ class TestLectures(unittest.TestCase):
         self.assertEqual(patchs[0]["livre_le"], "2026-11-19 16:00")
         self.assertEqual(patchs[1]["manquants"], ["ODA-4-specifique.patch"])
         self.assertEqual(patchs[2]["raison"], "Jira illisible (ConnectionError)")
-        self.assertEqual(sources.lire_patchs("Aucun patch livré ces 7 derniers jours dans l'agent Scrum Master."),
+        self.assertEqual(sources.lire_patchs("Aucun patch livré ces 7 derniers jours (registre des livraisons)."),
                          [])
 
     def test_token_usage(self):
@@ -106,13 +113,13 @@ class TestLectures(unittest.TestCase):
                              [("ODA-1", "patch", 1.25), ("ODA-2", "cadrage", 0.0)])
             self.assertEqual(sources.couts_par_etape(sources.lire_token_usage(Path(d)))[0],
                              {"etape": "patch", "appels": 1, "cout_usd": 1.25})
-            r = reg.lire({"agents": [{"nom": "scrum-master", "dossier": d, "port": 8501}]})
-            self.assertEqual(sources.cout_ticket_agent(r, "ODA-1"), 1.75)
-            self.assertIsNone(sources.cout_ticket_agent(reg.lire({}), "ODA-1"))
+            # coût d'un ticket chez les agents : token_usage.csv d'AGENT_DATA_DIR (ici, le dossier donné)
+            self.assertEqual(sources.cout_ticket_agent(reg.lire({}), "ODA-1", dossier=Path(d)), 1.75)
+            self.assertIsNone(sources.cout_ticket_agent(reg.lire({}), "ODA-1", dossier=Path(d) / "absent"))
 
 
 class TestAppelMCP(unittest.TestCase):
-    """Vrai client MCP contre un faux serveur scrum-master (aucun appel au modèle)."""
+    """Vrai client MCP contre un faux lecteur des données des agents (aucun appel au modèle)."""
 
     def setUp(self):
         temporaire = tempfile.TemporaryDirectory()
@@ -121,8 +128,7 @@ class TestAppelMCP(unittest.TestCase):
         self.config = self.dossier / "config"
 
     def agent(self, *args):
-        a = registre(self.dossier).agent("scrum-master")
-        return reg.Agent(nom=a.nom, titre=a.titre, dossier=a.dossier, port=a.port, mcp=a.mcp + args)
+        return lecteur(self.dossier, *args)
 
     def test_appel_direct(self):
         r = sources.appeler_mcp(self.agent(), [("analyses", {}), ("builds_jenkins", {"nombre": 3}),
@@ -136,7 +142,7 @@ class TestAppelMCP(unittest.TestCase):
         self.assertIn("cucumber", r.erreurs)
         self.assertIn("analyses", r.textes)
 
-    def test_scrum_master_sans_outil_patchs(self):
+    def test_lecteur_sans_outil_patchs(self):
         r = sources.appeler_mcp(self.agent("ancien"), [("analyses", {}), ("patchs", {"jours": 7})], self.config,
                                 delai=20)
         self.assertIn("analyses", r.textes)
@@ -147,12 +153,10 @@ class TestAppelMCP(unittest.TestCase):
             sources.appeler_mcp(self.agent(), [("question", {"texte": "x"})], self.config)
 
     def test_serveur_absent(self):
-        absent = reg.Agent(nom="scrum-master", titre="Scrum Master", dossier=self.dossier, port=8501,
-                           mcp=(str(self.dossier / "venv" / "python.exe"), "mcp_lecture.py"))
+        absent = dataclasses.replace(self.agent(), mcp=(str(self.dossier / "venv" / "python.exe"), "mcp_lecture.py"))
         with self.assertRaises(sources.SourceErreur):
             sources.appeler_mcp(absent, [("analyses", {})], self.config)
-        plante = reg.Agent(nom="scrum-master", titre="Scrum Master", dossier=self.dossier, port=8501,
-                           mcp=(sys.executable, "-c", "import sys; sys.exit(3)"))
+        plante = dataclasses.replace(self.agent(), mcp=(sys.executable, "-c", "import sys; sys.exit(3)"))
         with self.assertRaises(sources.SourceErreur):
             sources.appeler_mcp(plante, [("analyses", {})], self.config, delai=10)
 
@@ -173,7 +177,7 @@ class TestTableau(unittest.TestCase):
 
     @staticmethod
     def mcp_ko(agent, appels):
-        raise sources.SourceErreur("serveur MCP de Scrum Master injoignable (agent arrêté)")
+        raise sources.SourceErreur("serveur MCP de Données des agents injoignable (délai dépassé)")
 
     @staticmethod
     def csv(dossier, depuis):
@@ -182,25 +186,31 @@ class TestTableau(unittest.TestCase):
 
     def construire(self, **options):
         valeurs = {"pilote": FauxPilote(), "appeler_mcp": self.mcp_ok, "lire_csv": self.csv,
-                   "maintenant": MAINTENANT, **options}
+                   "maintenant": MAINTENANT, "lecteur": lecteur(self.dossier), **options}
         return tableau.construire(self.registre, self.journal, **valeurs)
 
     def test_tous_les_blocs(self):
         self.journal.noter_question("Qu'est-ce qu'on a fait sur ODA-9 ?", decision="repondre", cout_usd=0.3)
         t = self.construire()
-        self.assertEqual(self.appels, [("scrum-master", ["analyses", "cucumber", "builds_jenkins", "patchs",
-                                                         "boucles_cucumber", "retrospectives"])])
+        self.assertEqual(self.appels, [(reg.NOM_LECTEUR, ["analyses", "cucumber", "builds_jenkins", "patchs",
+                                                          "boucles_cucumber", "retrospectives"])])
         self.assertEqual(t.agents.resume, {sup.EN_LIGNE: 1, sup.ECHEC: 1})
         self.assertEqual([a["cle"] for a in t.analyses.lignes], ["ODA-1", "ODA-3"])
-        self.assertIn("localhost:8506", t.analyses.lignes[0]["lien"])   # onglet Lancement : agent-lancement
+        self.assertIn("localhost:8506", t.analyses.lignes[0]["lien"])   # analyses : agent-lancement
         self.assertIn("ticket=ODA-1", t.analyses.lignes[0]["lien"])
         self.assertIn("ODA-9", [x["cle"] for x in t.tickets.lignes])
+        self.assertIn("localhost:8506", [x for x in t.tickets.lignes if x["cle"] == "ODA-9"][0]["lien"])
         self.assertTrue(t.jenkins.resume["verrou"].startswith("occupé : CUCUMBER-RUN #12"))
+        self.assertEqual(t.jenkins.resume["proprietaire"], "cucumber")
+        clients = [l for l in t.jenkins.lignes if l["type"] == "client"]
+        self.assertTrue(clients and all("localhost:8507" in l["lien"] and "page=cucumber" in l["lien"]
+                                        for l in clients))              # clients Cucumber : agent-cucumber
         self.assertEqual(t.couts.resume["manager_7j"]["cout_usd"], 0.3)
-        self.assertEqual((t.couts.resume["scrum_7j"], t.couts.resume["scrum_30j"]), (0.4, 1.4))
+        self.assertEqual((t.couts.resume["agents_7j"], t.couts.resume["agents_30j"]), (0.4, 1.4))
         self.assertEqual([p["cle"] for p in t.patchs.lignes], ["ODA-2", "ODA-4", "ODA-5"])
         self.assertEqual(t.patchs.resume, {"jointe": 1, "non_jointe": 1, "non_verifiee": 1})
         self.assertIn("ticket=ODA-4", t.patchs.lignes[1]["lien"])
+        self.assertIn("localhost:8506", t.patchs.lignes[1]["lien"])
         alertes = " | ".join(a["texte"] for a in t.alertes.lignes)
         self.assertIn("Odatio : en échec", alertes)
         self.assertNotIn("ODA-4", alertes)                 # patch NON joint, génération bloquée : relances
@@ -216,7 +226,9 @@ class TestTableau(unittest.TestCase):
             "patch_non_verifie:ODA-5:2026-11-17T09:00",          # 1 j ouvré
             "analyse:ODA-3:2026-11-17T08:00"])                   # 3 j ouvrés : échue vendredi 8 h ; ODA-1 non
         self.assertIn("page=cucumber", relances[1].lien)
+        self.assertIn("localhost:8507", relances[1].lien)
         self.assertIn("ticket=ODA-3", relances[3].lien)
+        self.assertIn("localhost:8506", relances[3].lien)
 
     def test_builds_lus_et_affiches(self):
         appels = []
@@ -244,16 +256,16 @@ class TestTableau(unittest.TestCase):
         self.assertIn("dernier relevé", t.tickets.note)
         self.assertIn("ODA-1", [x["cle"] for x in t.tickets.lignes])          # dernier état connu
         self.assertEqual(len(t.agents.lignes), 2)                             # le reste s'affiche
-        self.assertIn("scrum_30j", t.couts.resume)
-        self.assertTrue(any("non consultable" in a["texte"] for a in t.alertes.lignes))
+        self.assertIn("agents_30j", t.couts.resume)
+        self.assertTrue(any("Données des agents non consultables" in a["texte"] for a in t.alertes.lignes))
 
     def test_patchs_outil_absent_ou_en_erreur(self):
         def mcp(erreur):
             return lambda agent, appels: sources.ResultatMCP(
                 textes={"analyses": ANALYSES, "cucumber": CUCUMBER, "builds_jenkins": BUILDS},
                 erreurs={"patchs": erreur})
-        t = self.construire(appeler_mcp=mcp("Unknown tool: patchs"))         # scrum-master sans agent-scrum-master#49
-        self.assertIn("pas encore l'outil patchs", t.patchs.note)
+        t = self.construire(appeler_mcp=mcp("Unknown tool: patchs"))         # lecteur sans l'outil patchs
+        self.assertIn("n'a pas l'outil patchs", t.patchs.note)
         self.assertFalse(t.patchs.erreur)
         self.assertFalse(any("non consultable" in a["texte"] for a in t.alertes.lignes))
         self.assertEqual(len(t.analyses.lignes), 2)
@@ -263,7 +275,7 @@ class TestTableau(unittest.TestCase):
         t = self.construire(appeler_mcp=self.mcp_ko)
         self.assertIn("injoignable", t.patchs.erreur)
         t = self.construire(appeler_mcp=lambda agent, appels: sources.ResultatMCP(textes={
-            "patchs": "Aucun patch livré ces 7 derniers jours dans l'agent Scrum Master."}))
+            "patchs": "Aucun patch livré ces 7 derniers jours (registre des livraisons)."}))
         self.assertEqual((t.patchs.lignes, t.patchs.erreur), ([], ""))
 
     def test_retrospectives(self):
@@ -284,16 +296,15 @@ class TestTableau(unittest.TestCase):
         self.assertFalse([r for r in initiatives.relances(self.journal, t, {"proposition_en_attente_jours": 0},
                                                           maintenant=MAINTENANT)
                           if r.regle == "proposition_en_attente_jours"])            # 0 : règle désactivée
-        # outil absent (scrum-master non redémarré) ou en erreur
+        # outil absent (lecteur pas à jour) ou en erreur
         t = self.construire(appeler_mcp=mcp(erreurs={"retrospectives": "Unknown tool: retrospectives"}))
-        self.assertIn("pas encore l'outil retrospectives", t.retrospectives.note)
+        self.assertIn("n'a pas l'outil retrospectives", t.retrospectives.note)
         self.assertFalse(any("non consultable" in a["texte"] for a in t.alertes.lignes if "retro" in a["texte"]))
         t = self.construire(appeler_mcp=mcp(erreurs={"retrospectives": "ERREUR : x"}))
         self.assertIn("retrospectives : ERREUR : x", t.retrospectives.erreur)
         # agent absent du registre : lignes sans lien
-        self.registre = reg.lire({"agents": [a for a in [
-            {"nom": "scrum-master", "titre": "Scrum Master", "dossier": str(self.dossier), "port": 8501,
-             "mcp": [sys.executable, str(FAUX_MCP)]}]]})
+        self.registre = reg.lire({"agents": [
+            {"nom": "lancement", "titre": "Lancement", "dossier": str(self.dossier), "port": 8506}]})
         t = self.construire(appeler_mcp=mcp({"retrospectives": RETROS}))
         self.assertEqual(t.retrospectives.lignes[0]["lien"], "")
         self.assertIn("absent du registre", t.retrospectives.note)
@@ -310,25 +321,34 @@ class TestTableau(unittest.TestCase):
         (self.dossier / "illisible.db").write_bytes(b"pas une base" * 100)
         journal = jr.Journal(self.dossier / "illisible.db", delai=0.2)
         t = tableau.construire(self.registre, journal, FauxPilote(erreur=True), appeler_mcp=self.mcp_ok,
-                               lire_csv=self.csv, maintenant=MAINTENANT)
+                               lire_csv=self.csv, maintenant=MAINTENANT, lecteur=lecteur(self.dossier))
         self.assertIn("Superviseur injoignable", t.agents.erreur)
         self.assertIn("journal illisible", t.tickets.erreur)
         self.assertEqual([x["cle"] for x in t.tickets.lignes], ["ODA-1", "ODA-2", "ODA-3"])   # repli : analyses
         self.assertTrue(t.couts.erreur)
         self.assertEqual(len(t.analyses.lignes), 2)
 
-    def test_sans_scrum_master_ni_csv(self):
+    def test_lecteur_indisponible(self):
+        """Lecteur des données introuvable (agent-socle absent…) : rien d'appelé, blocs en erreur, le reste s'affiche."""
         r = reg.lire({"agents": [{"nom": "odatio", "dossier": str(self.dossier), "port": 8502}]})
-
-        t = tableau.construire(r, self.journal, FauxPilote(etats=[]), appeler_mcp=self.mcp_ok,
-                               maintenant=MAINTENANT)
+        with mock.patch.object(reg, "lecteur", side_effect=RuntimeError("agent-socle absent")):
+            t = tableau.construire(r, self.journal, FauxPilote(etats=[]), appeler_mcp=self.mcp_ok,
+                                   maintenant=MAINTENANT)
         self.assertEqual(self.appels, [])
-        self.assertIn("absent du registre", t.analyses.erreur)
-        self.assertNotIn("scrum_30j", t.couts.resume)
+        self.assertIn("lecteur des données indisponible", t.analyses.erreur)
+        self.assertNotIn("agents_30j", t.couts.resume)
+        self.assertTrue(any("non consultables" in a["texte"] for a in t.alertes.lignes))
+
+    def test_liens_sans_agents_au_registre(self):
+        """Lancement et Cucumber absents du registre : données affichées, sans lien."""
+        self.registre = reg.lire({"agents": [{"nom": "odatio", "dossier": str(self.dossier), "port": 8502}]})
+        t = self.construire()
+        self.assertEqual([a["lien"] for a in t.analyses.lignes], ["", ""])
+        self.assertEqual({l["lien"] for l in t.jenkins.lignes if l["type"] == "client"}, {""})
 
     def test_couts_agent_inconnus_ou_illisibles(self):
         t = self.construire(lire_csv=lambda dossier, depuis: None)
-        self.assertNotIn("scrum_30j", t.couts.resume)                       # inconnu, pas 0 $
+        self.assertNotIn("agents_30j", t.couts.resume)                      # inconnu, pas 0 $
         self.assertIn("absent", t.couts.note)
 
         def csv_ko(dossier, depuis):
@@ -339,11 +359,11 @@ class TestTableau(unittest.TestCase):
 
     def test_alertes_du_journal(self):
         self.journal.noter_erreur("assistant", "RuntimeError : CLI absente")
-        self.journal.noter_etat("scrum-master", "en ligne", sup.INJOIGNABLE)
+        self.journal.noter_etat("lancement", "en ligne", sup.INJOIGNABLE)
         t = self.construire(maintenant=datetime.now())
         textes = " | ".join(a["texte"] for a in t.alertes.lignes)
         self.assertIn("assistant : RuntimeError : CLI absente", textes)
-        self.assertIn("scrum-master : en ligne → injoignable", textes)
+        self.assertIn("lancement : en ligne → injoignable", textes)
 
 
 if __name__ == "__main__":

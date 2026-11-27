@@ -16,7 +16,9 @@ from pathlib import Path
 from manager import configuration as conf
 from manager import registre as reg
 
-ORDRE = ("scrum-master", "odatio", "dev-tool")     # en cas de valeurs différentes, la première trouvée l'emporte
+# En cas de valeurs différentes, la première trouvée l'emporte : d'abord le .env partagé d'AGENT_DATA_DIR (lu par
+# tous les agents issus d'agent-scrum-master, supprimé), puis ceux des agents du registre
+ORDRE = (reg.NOM_LECTEUR, "odatio", "dev-tool")
 
 
 @dataclass
@@ -41,9 +43,16 @@ def nom_application(profil: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", profil.lower()).strip("-")
 
 
-def proposer(registre: reg.Registre) -> Proposition:
+def proposer(registre: reg.Registre, donnees: reg.Agent | None = None) -> Proposition:
+    """``donnees`` : source du .env partagé (``registre.lecteur()`` par défaut ; tests)."""
     p = Proposition()
-    agents = sorted(registre.agents, key=lambda a: ORDRE.index(a.nom) if a.nom in ORDRE else len(ORDRE))
+    if donnees is None:
+        try:
+            donnees = reg.lecteur()
+        except Exception:  # noqa: BLE001 — agent-socle absent : .env des agents du registre seulement
+            donnees = None
+    sources = ([donnees] if donnees is not None else []) + list(registre.agents)
+    agents = sorted(sources, key=lambda a: ORDRE.index(a.nom) if a.nom in ORDRE else len(ORDRE))
     valeurs: dict = {}                                  # variable -> [(agent, valeur)]
     envs: dict = {}
     for agent in agents:
@@ -68,8 +77,9 @@ def proposer(registre: reg.Registre) -> Proposition:
     odatio = next((a for a in registre.agents if a.nom == "odatio"), None)
     if odatio:
         _applications_odatio(p, odatio, envs.get("odatio", {}))
-    p.notes.append("Restent dans chaque agent (réglages propres) : réglages Cucumber, modèles et plafonds, base "
-                   "Cucumber de scrum-master, fichiers interdits et données réelles des projets d'odatio.")
+    p.notes.append("Restent dans le .env partagé (AGENT_DATA_DIR) ou dans chaque agent (réglages propres) : réglages "
+                   "Cucumber, modèles et plafonds, base Cucumber, fichiers interdits et données réelles des projets "
+                   "d'odatio.")
     return p
 
 

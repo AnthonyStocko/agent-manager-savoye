@@ -2,8 +2,9 @@
 Serveur MCP (stdio) en LECTURE SEULE pour agent-manager-savoye : état des analyses, d'un ticket Jira, de Cucumber
 et des derniers builds Jenkins, patchs livrés (tools/lecture_manager.py). Rien n'y écrit.
 
-Lancé par le manager avec le python du venv de l'agent, dans le dossier de l'agent :
-  .venv\\Scripts\\python.exe mcp_lecture.py
+Source « donnees » du manager (manager/registre.py, lecteur()) : lancé avec le python du venv du manager, dans
+AGENT_DATA_DIR (il remplace le serveur qu'agent-scrum-master, supprimé, portait pour le manager) :
+  venv\\Scripts\\python.exe mcp_lecture.py
 
 Ne pas le déclarer dans un .mcp.json à la racine : le CLI claude lancé par l'agent depuis cette racine le
 chargerait à chaque appel de production.
@@ -15,7 +16,7 @@ import sys
 from dotenv import load_dotenv
 from agent_socle.chemins import DATA_DIR
 
-RACINE = DATA_DIR  # dossier de travail et .env : AGENT_DATA_DIR (agent-scrum-master)
+RACINE = DATA_DIR  # dossier de travail et .env partagés des agents : AGENT_DATA_DIR
 os.chdir(RACINE)
 load_dotenv(os.path.join(RACINE, ".env"))   # sans override : les accès transmis par le manager l'emportent
 
@@ -34,8 +35,8 @@ def _appel(fonction, *args) -> str:
 
 
 def creer_serveur() -> MCPServer:
-    serveur = MCPServer("scrum-master", instructions="Agent Scrum Master, en lecture seule : état des analyses de "
-                                                     "tickets, de Cucumber, des builds Jenkins et des patchs livrés.")
+    serveur = MCPServer("donnees", instructions="Données des agents, en lecture seule : état des analyses de "
+                                                "tickets, de Cucumber, des builds Jenkins et des patchs livrés.")
 
     @serveur.tool(description="Analyses (cadrages) présentes dans l'agent, avec leur état : publiée dans Jira ou "
                               "brouillon à valider.")
@@ -81,5 +82,5 @@ def creer_serveur() -> MCPServer:
 
 
 if __name__ == "__main__":
-    print("Serveur MCP en lecture seule de l'agent Scrum Master (stdio).", file=sys.stderr)
+    print("Serveur MCP en lecture seule des données des agents (stdio).", file=sys.stderr)
     creer_serveur().run("stdio")

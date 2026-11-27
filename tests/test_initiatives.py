@@ -15,7 +15,7 @@ def iso(d: datetime) -> str:
 
 
 def minute(d: datetime) -> str:
-    """Format des outils de scrum-master : « AAAA-MM-JJ HH:MM »."""
+    """Format des outils du lecteur des données : « AAAA-MM-JJ HH:MM »."""
     return d.strftime("%Y-%m-%d %H:%M")
 
 
@@ -151,7 +151,8 @@ class TestRelances(unittest.TestCase):
         self.addCleanup(temporaire.cleanup)
         self.journal = jr.Journal(Path(temporaire.name) / "manager.db", delai=0.2)
         self.t = tableau_vide()
-        self.t.agents.lignes = [{"nom": "scrum-master", "url": "http://localhost:8501"}]
+        self.t.agents.lignes = [{"nom": "lancement", "url": "http://localhost:8506"},
+                                {"nom": "cucumber", "url": "http://localhost:8507"}]
 
     def cles(self, maintenant=None, **seuils):
         return [r.cle for r in ini.relances(self.journal, self.t, seuils, maintenant or self.LUNDI)]
@@ -167,18 +168,24 @@ class TestRelances(unittest.TestCase):
         self.assertEqual(len(self.cles(analyse_a_valider_jours=1)), 2)
 
     def test_redirection_sans_suite(self):
-        redirection = SimpleNamespace(agent="scrum-master", ticket="ODA-7", projet="", onglet="lancement")
+        redirection = SimpleNamespace(agent="lancement", ticket="ODA-7", projet="", onglet="")
         self.journal.noter_question("ODA-7 ?", decision="rediriger", redirections=[redirection])
+        # redirection du journal vers l'ancien agent-scrum-master (supprimé) : suivie aussi
+        self.journal.noter_question("ODA-9 ?", decision="rediriger", redirections=[
+            SimpleNamespace(agent="scrum-master", ticket="ODA-9", projet="", onglet="lancement")])
         self.journal.noter_question("ODA-8 ?", decision="rediriger", redirections=[
             SimpleNamespace(agent="odatio", ticket="ODA-8", projet="", onglet="assistant")])     # autre agent
         apres = ini.ajouter_jours_ouvres(datetime.now(), 2) + timedelta(minutes=1)
         self.assertEqual(self.cles(datetime.now() + timedelta(hours=1)), [])                    # trop tôt
         relances = ini.relances(self.journal, self.t, {}, apres)
-        self.assertEqual([r.regle for r in relances], ["redirection_sans_suite_jours"])
-        self.assertIn(":8506/", relances[0].lien)                     # page lancement → agent-lancement (liens.py)
-        self.assertIn("ticket=ODA-7", relances[0].lien)
-        self.journal.observer_analyses([{"cle": "ODA-7", "libelle": "brouillon", "a_valider": True,
-                                         "modifiee": (datetime.now() + timedelta(minutes=5)).isoformat()[:16]}])
+        self.assertEqual([r.regle for r in relances], ["redirection_sans_suite_jours"] * 2)
+        self.assertEqual(sorted(r.cle.split(":")[1] for r in relances), ["ODA-7", "ODA-9"])
+        for r in relances:
+            self.assertIn(":8506/", r.lien)                               # agent-lancement
+            self.assertIn("redirigé vers Lancement", r.texte)
+        self.journal.observer_analyses([{"cle": c, "libelle": "brouillon", "a_valider": True,
+                                         "modifiee": (datetime.now() + timedelta(minutes=5)).isoformat()[:16]}
+                                        for c in ("ODA-7", "ODA-9")])
         self.assertEqual(self.cles(apres), [])                            # analyse modifiée depuis : suivie
 
     def test_patchs(self):
@@ -205,6 +212,7 @@ class TestRelances(unittest.TestCase):
         relances = ini.relances(self.journal, self.t, {}, self.LUNDI)
         self.assertEqual([r.cle for r in relances], ["build:RUN:12"])        # VERIFY : réussi depuis
         self.assertIn("page=cucumber", relances[0].lien)
+        self.assertIn(":8507/", relances[0].lien)                           # agent-cucumber
         self.assertEqual(self.cles(build_en_echec=False), [])
 
     def test_generation_bloquee(self):

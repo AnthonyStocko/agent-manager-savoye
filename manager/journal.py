@@ -8,7 +8,7 @@
 - ``erreur`` : échec de l'assistant ou d'une source (message court nettoyé).
 
 Index par ticket : table ``tickets`` (événement → clé Jira) et table ``etat_tickets`` (dernier état connu de
-l'analyse scrum-master, relevé par le tableau de bord à chaque rafraîchissement), lus par ``ticket(cle)`` et l'outil ``historique_ticket``.
+l'analyse d'agent-lancement, relevé par le tableau de bord à chaque rafraîchissement), lus par ``ticket(cle)`` et l'outil ``historique_ticket``.
 
 Point du matin (lot 6 bis) : table ``points`` (une seule ligne, date du dernier « Vu ») et ``bilan(depuis)``.
 Relances (lot 6 bis) : table ``relances_ignorees`` (clé de la relance → masquée jusqu'au …), purgée à échéance.
@@ -239,7 +239,7 @@ class Journal:
                           details={"origine": nettoyer(origine, 40), "message": nettoyer(message, MESSAGE_MAX)})
 
     def observer_analyses(self, analyses: list[dict]) -> bool:
-        """Dernier état connu des analyses remontées par scrum-master : [{cle, libelle, a_valider, modifiee}]
+        """Dernier état connu des analyses (agent-lancement, lecteur des données) : [{cle, libelle, a_valider, modifiee}]
         (``sources.lire_analyses``). Ne lève jamais."""
         lignes = []
         for a in analyses:
@@ -348,7 +348,7 @@ class Journal:
 
     def ticket(self, cle: str, limite: int = 10) -> dict:
         """Vue consolidée d'un ticket : dernières questions et redirections, dernier état connu de l'analyse
-        scrum-master (relevé par le tableau de bord), coût cumulé des questions au manager."""
+        d'agent-lancement (relevé par le tableau de bord), coût cumulé des questions au manager."""
         cle = (cle or "").strip().upper()
         if not TICKET.fullmatch(cle):
             raise JournalErreur(f"clé de ticket invalide : « {cle} » (format attendu : PROJET-123)")
@@ -371,7 +371,7 @@ class Journal:
         }
 
     def tickets_recents(self, jours: int = 7, limite: int = 20) -> list[dict]:
-        """Tickets vus récemment dans le journal ou dont l'analyse scrum-master a été modifiée récemment, du plus
+        """Tickets vus récemment dans le journal ou dont l'analyse (agent-lancement) a été modifiée récemment, du plus
         récent au plus ancien : [{cle, derniere_activite, nb_evenements, analyse, a_valider}]."""
         depuis = (datetime.now() - timedelta(days=jours)).isoformat(timespec="seconds")
 

@@ -50,7 +50,7 @@ def analyses(racine: str = WORKSPACE_DIR) -> str:
     """Analyses (cadrages) présentes dans l'agent, de la plus récente à la plus ancienne, avec leur état."""
     fichiers = sorted(glob.glob(os.path.join(racine, "*-cadrage.md")), key=os.path.getmtime, reverse=True)
     if not fichiers:
-        return "Aucune analyse dans l'agent Scrum Master."
+        return "Aucune analyse dans les données des agents (agent-lancement)."
     lignes = []
     for chemin in fichiers[:ANALYSES_MAX]:
         cle = os.path.basename(chemin)[:-len("-cadrage.md")]
@@ -60,7 +60,7 @@ def analyses(racine: str = WORKSPACE_DIR) -> str:
         lignes.append(f"- {cle} (modifiée le {_date(os.path.getmtime(chemin))}) : {etat['libelle']}{a_valider}")
     if len(fichiers) > ANALYSES_MAX:
         lignes.append(f"… {len(fichiers) - ANALYSES_MAX} analyse(s) plus ancienne(s)")
-    return "Analyses de l'agent Scrum Master :\n" + "\n".join(lignes)
+    return "Analyses (agent-lancement) :\n" + "\n".join(lignes)
 
 
 def analyse(ticket: str, racine: str = WORKSPACE_DIR) -> str:
@@ -68,7 +68,7 @@ def analyse(ticket: str, racine: str = WORKSPACE_DIR) -> str:
     cle = _cle(ticket)
     chemin = os.path.join(racine, publication.cadrage_path(cle))
     if not os.path.exists(chemin):
-        return f"Aucune analyse de {cle} dans l'agent Scrum Master."
+        return f"Aucune analyse de {cle} dans les données des agents (agent-lancement)."
     with open(chemin, encoding="utf-8", errors="replace") as f:
         texte = f.read()
     etat = publication.status(cle, texte)
@@ -85,7 +85,7 @@ def ticket(cle: str) -> str:
     email = (os.getenv("JIRA_READ_EMAIL") if lecture else os.getenv("JIRA_EMAIL", "")) or ""
     jeton = lecture or os.getenv("JIRA_API_TOKEN", "").strip()
     if not (domaine and email.strip() and jeton):
-        raise LectureErreur("Jira n'est pas configuré dans l'agent Scrum Master.")
+        raise LectureErreur("Jira n'est pas configuré dans le .env des agents (AGENT_DATA_DIR).")
     try:
         reponse = requests.get(f"https://{domaine}/rest/api/3/issue/{cle}", auth=(email.strip(), jeton), timeout=15,
                                headers={"Accept": "application/json"},
@@ -111,13 +111,13 @@ def cucumber() -> str:
     clients = assistant.known_clients()
     clients = [c for c in clients if not c.startswith("_")]
     if not clients:
-        return "Aucun client Cucumber dans l'agent Scrum Master."
+        return "Aucun client Cucumber dans les données des agents (agent-cucumber)."
     lignes = []
     for client in clients:
         detenteur = verrou.holder(client)
         lignes.append(f"- {client} : {verrou.describe(detenteur) if detenteur else 'aucune génération en cours'}")
     jobs = [f"{n} = {os.getenv(n)}" for n in JOBS if os.getenv(n, "").strip()]
-    return _masque("Cucumber dans l'agent Scrum Master :\n" + "\n".join(lignes)
+    return _masque("Cucumber (agent-cucumber) :\n" + "\n".join(lignes)
                    + ("\nJobs Jenkins : " + ", ".join(jobs) if jobs else "\nAucun job Jenkins configuré."))
 
 
@@ -136,7 +136,7 @@ def builds(job: str = "", nombre: int = 5) -> str:
             resultat = b.get("resultat") or "EN COURS"
             lignes.append(f"  #{b['numero']} {resultat} — {debut}, {round((b.get('duree') or 0) / 60000)} min")
         blocs.append(f"{nom} :\n" + ("\n".join(lignes) or "  (aucun build lisible)"))
-    return _masque("\n".join(blocs) or "Aucun job Jenkins configuré dans l'agent Scrum Master.")
+    return _masque("\n".join(blocs) or "Aucun job Jenkins configuré dans le .env des agents.")
 
 
 def patchs(jours: int = 7, chemin: str = "") -> str:
@@ -155,7 +155,7 @@ def patchs(jours: int = 7, chemin: str = "") -> str:
     except livraisons.RegistreErreur as e:
         raise LectureErreur(str(e))
     if not entrees:
-        return (f"Aucun patch livré ces {jours} derniers jours dans l'agent Scrum Master (registre des livraisons, "
+        return (f"Aucun patch livré ces {jours} derniers jours (registre des livraisons, "
                 f"rempli à chaque étape patch).")
     lignes = []
     for e in entrees:
@@ -168,7 +168,7 @@ def patchs(jours: int = 7, chemin: str = "") -> str:
             etat = "en pièce jointe Jira"
         lignes.append(f"- {e['ticket']} (livré le {e['date'][:16].replace('T', ' ')}) : {', '.join(e['fichiers'])}"
                       f" — {etat}")
-    return _masque(f"Patchs livrés ces {jours} derniers jours (agent Scrum Master) :\n" + "\n".join(lignes))
+    return _masque(f"Patchs livrés ces {jours} derniers jours (agent-lancement) :\n" + "\n".join(lignes))
 
 
 BOUCLES_MAX = 5

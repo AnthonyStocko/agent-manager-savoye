@@ -5,7 +5,7 @@ bloc Alertes, les relances (lot 6 bis), avec « Ignorer ». Point et relances so
 du journal seule), pour qu'un clic sur « Vu » ou « Ignorer » prenne effet tout de suite.
 
 Rafraîchi toutes les RAFRAICHISSEMENT_S secondes (``st.fragment(run_every=…)``). Le calcul est mis en cache
-(CACHE_S) pour toutes les sessions : plusieurs onglets de navigateur ne relancent pas le serveur MCP de scrum-master
+(CACHE_S) pour toutes les sessions : plusieurs onglets de navigateur ne relancent pas le lecteur MCP des données des agents
 chacun de leur côté.
 """
 
@@ -124,7 +124,7 @@ def _tickets(bloc: tableau.Bloc) -> None:
                         + f"  \n:gray[{t['derniere_activite'].replace('T', ' ')[:16]}"
                         + (f" · {t['nb_evenements']} échange(s) avec le manager" if t["nb_evenements"] else "") + "]")
         if t.get("lien"):
-            droite.link_button("Ouvrir", t["lien"], help="Scrum Master, onglet Lancement, ticket prérempli")
+            droite.link_button("Ouvrir", t["lien"], help="Agent Lancement, ticket prérempli")
 
 
 def _analyses(bloc: tableau.Bloc) -> None:
@@ -135,14 +135,14 @@ def _analyses(bloc: tableau.Bloc) -> None:
     for a in bloc.lignes:
         gauche, droite = st.columns([5, 1])
         gauche.markdown(f"**{a['cle']}** · {a['libelle']}  \n:gray[modifiée le {a['modifiee']}]")
-        droite.link_button("Valider", a["lien"], help="Ouvre Scrum Master sur ce ticket ; la validation s'y fait")
+        droite.link_button("Valider", a["lien"], help="Ouvre l'agent Lancement sur ce ticket ; la validation s'y fait")
 
 
 def _jenkins(bloc: tableau.Bloc) -> None:
     if not _entete(bloc):
         return
     verrou = bloc.resume.get("verrou", "inconnu")
-    st.markdown(f"Verrou Cucumber (un seul job à la fois, géré par Scrum Master) : **{verrou}**")
+    st.markdown(f"Verrou Cucumber (un seul job à la fois, géré par l'agent Cucumber) : **{verrou}**")
     clients = [l for l in bloc.lignes if l["type"] == "client"]
     if clients:
         st.markdown("  \n".join(f"{'🟡' if c['en_cours'] else '⚪'} {c['client']} : {c['etat']}" for c in clients))
@@ -200,7 +200,7 @@ def _patchs(bloc: tableau.Bloc) -> None:
         gauche.markdown(f"**{p['cle']}** · {', '.join(p['fichiers'])}  \n"
                         f":gray[livré le {p['livre_le']}] · {etat}")
         if p.get("lien"):
-            droite.link_button("Ouvrir", p["lien"], help="Scrum Master, onglet Lancement, ticket prérempli")
+            droite.link_button("Ouvrir", p["lien"], help="Agent Lancement, ticket prérempli")
 
 
 def _retrospectives(bloc: tableau.Bloc) -> None:
@@ -234,8 +234,8 @@ def _couts(bloc: tableau.Bloc) -> None:
     r = bloc.resume
     colonnes = st.columns(4)
     for colonne, (cle, libelle) in zip(colonnes, (("manager_7j", "Manager · 7 j"), ("manager_30j", "Manager · 30 j"),
-                                                  ("scrum_7j", "Scrum Master · 7 j"),
-                                                  ("scrum_30j", "Scrum Master · 30 j"))):
+                                                  ("agents_7j", "Agents · 7 j"),
+                                                  ("agents_30j", "Agents · 30 j"))):
         valeur = r.get(cle)
         if isinstance(valeur, dict):
             colonne.metric(libelle, _dollars(valeur["cout_usd"]), help=f"{valeur['questions']} question(s)"
@@ -243,7 +243,7 @@ def _couts(bloc: tableau.Bloc) -> None:
         else:
             colonne.metric(libelle, _dollars(valeur))
     if bloc.lignes:
-        with st.expander("Scrum Master : coût par étape (30 j)"):
+        with st.expander("Agents : coût par étape (30 j)"):
             st.dataframe([{"Étape": l["etape"], "Appels": l["appels"], "Coût ($)": l["cout_usd"]}
                           for l in bloc.lignes], hide_index=True, width="stretch")
 

@@ -23,8 +23,6 @@ from urllib.parse import urlencode
 
 # Onglets connus de chaque agent (nom du registre) : valeur du paramètre page
 ONGLETS = {
-    "scrum-master": ("integration", "lancement", "cucumber", "cucumber-avance", "revue", "assistant",
-                     "connaissances"),
     "integration": (),
     "lancement": (),
     "cucumber": ("cucumber", "cucumber-avance"),
@@ -34,8 +32,8 @@ ONGLETS = {
     "odatio": ("assistant",),
     "dev-tool": ("developper",),
 }
-# Onglets d'agent-scrum-master partis dans un agent spécialisé (découpage) : agent et onglet cibles ; le lien va
-# directement à l'agent s'il est au registre (sinon à agent-scrum-master, qui renvoie vers lui)
+# Compatibilité : anciens liens vers un onglet d'agent-scrum-master (supprimé), parti dans un agent spécialisé
+# (découpage) : agent et onglet cibles, si l'agent est au registre
 REDIRECTIONS = {"integration": ("integration", ""), "lancement": ("lancement", ""), "cucumber": ("cucumber", "cucumber"),
                 "cucumber-avance": ("cucumber", "cucumber-avance"), "revue": ("revue-pr", "")}
 PARAMETRES = ("page", "ticket", "projet", "conversation", "question", "demande", "depot", "contexte")
@@ -79,7 +77,8 @@ def urls_du_registre() -> dict:
 
 
 def rediriger(agent: str, url: str, page: str, urls: dict = None) -> tuple:
-    """(agent, adresse, onglet) cibles : onglet d'agent-scrum-master parti dans un agent du registre, sinon inchangés."""
+    """(agent, adresse, onglet) cibles : ancien onglet d'agent-scrum-master (supprimé) parti dans un agent du
+    registre, sinon inchangés."""
     if agent != "scrum-master" or page not in REDIRECTIONS:
         return agent, url, page
     cible, onglet = REDIRECTIONS[page]
